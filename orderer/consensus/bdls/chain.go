@@ -20,12 +20,39 @@ type Chain struct {
 	Config    *bdls.Config
 }
 
+type Chain2 struct {
+	Chain
+}
+
+/*
 func (c *Chain) Order(env *common.Envelope, configSeq uint64) error {
 	//TODO
 	return nil
 }
-
+*/
 func (c *Chain) Configure(env *common.Envelope, configSeq uint64) error {
+	//TODO
+	return nil
+}
+
+func (c *Chain) WaitReady() error {
+	//TODO
+	return nil
+}
+
+func (c *Chain) Errored() <-chan struct {
+	//TODO
+}
+
+func (c *Chain) Start() {
+	//TODO
+}
+
+func (c *Chain) Halt() {
+	//TODO
+}
+
+func (c *Chain2) Order(env *common.Envelope, configSeq uint64) error {
 	//TODO
 	return nil
 }
