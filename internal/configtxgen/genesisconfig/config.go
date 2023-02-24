@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hyperledger/fabric-protos-go/orderer/bdls"
 	"github.com/hyperledger/fabric-protos-go/orderer/etcdraft"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/viperutil"
@@ -23,6 +24,9 @@ import (
 const (
 	// EtcdRaft The type key for etcd based RAFT consensus.
 	EtcdRaft = "etcdraft"
+
+	// Bdls The type key for etcd based Bdls consensus.
+	Bdls = "bdls"
 )
 
 var logger = flogging.MustGetLogger("common.tools.configtxgen.localconfig")
@@ -42,6 +46,10 @@ const (
 	// the etcd/raft-based ordering service.
 	SampleDevModeEtcdRaftProfile = "SampleDevModeEtcdRaft"
 
+	// SampleDevModeBdlsProfile references the sample profile used for testing
+	// the BDLS-based ordering service.
+	SampleDevModeBdlsProfile = "SampleDevModeBdls"
+
 	// SampleAppChannelInsecureSoloProfile references the sample profile which
 	// does not include any MSPs and uses solo for ordering.
 	SampleAppChannelInsecureSoloProfile = "SampleAppChannelInsecureSolo"
@@ -49,6 +57,10 @@ const (
 	// testing the etcd/raft-based ordering service using the channel
 	// participation API.
 	SampleAppChannelEtcdRaftProfile = "SampleAppChannelEtcdRaft"
+
+	// SampleAppChannelBdlsProfile references the sample profile used for
+	// testing the Bdls-based ordering service using the channel participation API.
+	SampleAppChannelBdlsProfile = "SampleAppChannelBdls"
 
 	// SampleSingleMSPChannelProfile references the sample profile which
 	// includes only the sample MSP and is used to create a channel
@@ -145,6 +157,7 @@ type Orderer struct {
 	BatchTimeout     time.Duration            `yaml:"BatchTimeout"`
 	BatchSize        BatchSize                `yaml:"BatchSize"`
 	ConsenterMapping []*Consenter             `yaml:"ConsenterMapping"`
+	Bdls             *bdls.ConfigMetadata     `yaml:"Bdls"`
 	EtcdRaft         *etcdraft.ConfigMetadata `yaml:"EtcdRaft"`
 	Organizations    []*Organization          `yaml:"Organizations"`
 	MaxChannels      uint64                   `yaml:"MaxChannels"`
@@ -185,6 +198,12 @@ var genesisDefaults = TopLevel{
 				HeartbeatTick:        1,
 				MaxInflightBlocks:    5,
 				SnapshotIntervalSize: 16 * 1024 * 1024, // 16 MB
+			},
+		},
+		Bdls: &bdls.ConfigMetadata{
+			Options: &bdls.Options{
+				Epoch:         2023 - 02 - 23,
+				CurrentHeight: 0,
 			},
 		},
 	},
@@ -324,6 +343,37 @@ loop:
 	switch ord.OrdererType {
 	case "solo":
 		// nothing to be done here
+	case Bdls:
+		if ord.Bdls == nil {
+			logger.Panicf("%s configuration missing", Bdls)
+		}
+		if ord.Bdls.Options == nil {
+			logger.Infof("Orderer.Bdls.Options unset, setting to %v", genesisDefaults.Orderer.Bdls.Options)
+			ord.Bdls.Options = genesisDefaults.Orderer.Bdls.Options
+		}
+		if len(ord.Bdls.Consenters) == 0 {
+			logger.Panicf("%s configuration did not specify any consenter", Bdls)
+		}
+		for _, c := range ord.Bdls.GetConsenters() {
+			if c.Host == "" {
+				logger.Panicf("consenter info in %s configuration did not specify host", Bdls)
+			}
+			if c.Port == 0 {
+				logger.Panicf("consenter info in %s configuration did not specify port", Bdls)
+			}
+			if c.ClientTlsCert == nil {
+				logger.Panicf("consenter info in %s configuration did not specify client TLS cert", Bdls)
+			}
+			if c.ServerTlsCert == nil {
+				logger.Panicf("consenter info in %s configuration did not specify server TLS cert", Bdls)
+			}
+			clientCertPath := string(c.GetClientTlsCert())
+			cf.TranslatePathInPlace(configDir, &clientCertPath)
+			c.ClientTlsCert = []byte(clientCertPath)
+			serverCertPath := string(c.GetServerTlsCert())
+			cf.TranslatePathInPlace(configDir, &serverCertPath)
+			c.ServerTlsCert = []byte(serverCertPath)
+		}
 	case EtcdRaft:
 		if ord.EtcdRaft == nil {
 			logger.Panicf("%s configuration missing", EtcdRaft)

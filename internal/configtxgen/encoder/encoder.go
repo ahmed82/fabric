@@ -41,6 +41,10 @@ const (
 	ConsensusTypeSolo = "solo"
 	// ConsensusTypeEtcdRaft identifies the Raft-based consensus implementation.
 	ConsensusTypeEtcdRaft = "etcdraft"
+
+	// ConsensusTypeBdls identifies the Bdls-based consensus implementation.
+	ConsensusTypeBdls = "Bdls"
+
 	// ConsensusTypeBFT identifies the BFT-based consensus implementation.
 	ConsensusTypeBFT = "BFT"
 
@@ -206,6 +210,10 @@ func NewOrdererGroup(conf *genesisconfig.Orderer) (*cb.ConfigGroup, error) {
 	case ConsensusTypeEtcdRaft:
 		if consensusMetadata, err = channelconfig.MarshalEtcdRaftMetadata(conf.EtcdRaft); err != nil {
 			return nil, errors.Errorf("cannot marshal metadata for orderer type %s: %s", ConsensusTypeEtcdRaft, err)
+		}
+	case ConsensusTypeBdls:
+		if consensusMetadata, err = channelconfig.MarshalBdlsMetadata(conf.Bdls); err != nil {
+			return nil, errors.Errorf("cannot marshal metadata for orderer type %s: %s", ConsensusTypeBdls, err)
 		}
 	case ConsensusTypeBFT:
 		consenterProtos, err := consenterProtosFromConfig(conf.ConsenterMapping)
