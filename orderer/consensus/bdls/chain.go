@@ -150,6 +150,7 @@ func NewChain(
 	conf Configurator,
 	rpc RPC,
 	observeC chan<- uint64) (*Chain, error) {
+		b := support.Block(support.Height() - 1)
 	return &Chain{
 		configurator: conf,
 		rpc:          rpc,
@@ -160,6 +161,7 @@ func NewChain(
 		doneC:        make(chan struct{}),
 		resignC:      make(chan struct{}),
 		startC:       make(chan struct{}),
+		lastBlock:    b,
 		observeC:     observeC,
 		support:      support,
 		clock:        opts.Clock,
@@ -168,7 +170,35 @@ func NewChain(
 		opts: opts,
 	}, nil
 }
+/* replaced with c.lastBlock based on [FAB-14240]
+func PreviousConfigBlockFromLedgerOrPanic(ledger Ledger, logger Logger) *cb.Block {
+	block, err := previousConfigBlockFromLedger(ledger)
+	if err != nil {
+		logger.Panicf("Failed retrieving previous config block: %v", err)
+	}
+	return block
+}
 
+// LastConfigBlock returns the last config block relative to the given block.
+func LastConfigBlock(block *com
+	mon.Block, blockRetriever BlockRetriever) (*common.Block, error) {
+	if block == nil {
+		return nil, errors.New("nil block")
+	}
+	if blockRetriever == nil {
+		return nil, errors.New("nil blockRetriever")
+	}
+	lastConfigBlockNum, err := protoutil.GetLastConfigIndexFromBlock(block)
+	if err != nil {
+		return nil, err
+	}
+	lastConfigBlock := blockRetriever.Block(lastConfigBlockNum)
+	if lastConfigBlock == nil {
+		return nil, errors.Errorf("unable to retrieve last config block [%d]", lastConfigBlockNum)
+	}
+	return lastConfigBlock, nil
+}
+*/
 type submit struct {
 	req *orderer.SubmitRequest
 	//leader chan uint64
@@ -210,7 +240,7 @@ func (c *Chain) Start() {
 	// create a consensus config to validate this message at the correct height
 	config := &bdls.Config{
 		Epoch:         time.Now(),
-		CurrentHeight: 0,
+		CurrentHeight: c.lastBlock,
 		StateCompare:  func(a bdls.State, b bdls.State) int { return bytes.Compare(a, b) },
 		StateValidate: func(bdls.State) bool { return true },
 	}
