@@ -102,7 +102,7 @@ func (s *RPC) SendConsensus(destination uint64, msg *orderer.ConsensusRequest) e
 }
 
 // SendSubmit sends a SubmitRequest to the given destination node.
-func (s *RPC) SendSubmit(destination uint64, request *orderer.SubmitRequest, report func(error)) error {
+func (s *RPC)  SendSubmit(destination uint64, request *orderer.SubmitRequest, report func(error)) error {
 	if s.Logger.IsEnabledFor(zapcore.DebugLevel) {
 		defer s.submitSent(time.Now(), destination, request)
 	}

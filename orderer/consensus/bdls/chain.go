@@ -22,8 +22,10 @@ import (
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/orderer/common/cluster"
+	"github.com/hyperledger/fabric/orderer/common/types"
 	"github.com/hyperledger/fabric/orderer/consensus"
 	"github.com/pkg/errors"
+	"go.etcd.io/etcd/raft/v3"
 
 	//"google.golang.org/protobuf/proto"
 	"github.com/golang/protobuf/proto"
@@ -34,6 +36,35 @@ import (
 // None is a placeholder node ID used when there is no leader.
 const None uint64 = 0
 
+//go:generate counterfeiter -o mocks/mock_rpc.go . RPC
+
+// RPC is used to mock the transport layer in tests.
+type RPC interface {
+	SendConsensus(dest uint64, msg *orderer.ConsensusRequest) error
+	SendSubmit(dest uint64, request *orderer.SubmitRequest, report func(err error)) error
+}
+
+//go:generate counterfeiter -o mocks/mock_blockpuller.go . BlockPuller
+
+// BlockPuller is used to pull blocks from other OSN
+type BlockPuller interface {
+	PullBlock(seq uint64) *common.Block
+	HeightsByEndpoints() (map[string]uint64, error)
+	Close()
+}
+
+// CreateBlockPuller is a function to create BlockPuller on demand.
+// It is passed into chain initializer so that tests could mock this.
+type CreateBlockPuller func() (BlockPuller, error)
+
+//go:generate mockery -dir . -name Configurator -case underscore -output ./mocks/
+
+// Configurator is used to configure the communication layer
+// when the chain starts.
+type Configurator interface {
+	Configure(channel string, newNodes []cluster.RemoteNode)
+}
+
 // Chain implements consensus.Chain interface.
 type Chain struct {
 	configurator Configurator
@@ -42,6 +73,7 @@ type Chain struct {
 	// the starting time point for consensus
 	Epoch time.Time
 
+	bdlsID    uint64
 	channelID string
 	consensus *bdls.Consensus
 
@@ -70,6 +102,8 @@ type Chain struct {
 	// https://github.com/BDLS-bft/fabric/commit/dc170d497b0a474787fc00694c0a0942697399d8
 	lastBlock *common.Block
 
+	createPuller CreateBlockPuller // func used to create BlockPuller on demand
+
 	// BCCSP instance
 	CryptoProvider bccsp.BCCSP
 
@@ -77,38 +111,19 @@ type Chain struct {
 	logger *flogging.FabricLogger
 
 	bdlsMetadataLock sync.RWMutex
-}
 
-//go:generate counterfeiter -o mocks/mock_blockpuller.go . BlockPuller
-
-// BlockPuller is used to pull blocks from other OSN
-type BlockPuller interface {
-	PullBlock(seq uint64) *common.Block
-	HeightsByEndpoints() (map[string]uint64, error)
-	Close()
-}
-
-//go:generate mockery -dir . -name Configurator -case underscore -output ./mocks/
-
-// Configurator is used to configure the communication layer
-// when the chain starts.
-type Configurator interface {
-	Configure(channel string, newNodes []cluster.RemoteNode)
-}
-
-//go:generate counterfeiter -o mocks/mock_rpc.go . RPC
-
-// RPC is used to mock the transport layer in tests.
-type RPC interface {
-	Step(dest uint64, msg *orderer.StepRequest) (*orderer.StepResponse, error)
-	SendSubmit(dest uint64, request *orderer.SubmitRequest) error
+	statusReportMutex sync.Mutex
+	consensusRelation types.ConsensusRelation
+	status            types.Status
 }
 
 // Options contains necessary artifacts to start Bdls-based chain
 type Options struct {
+	BdlsID uint64
 	// the starting time point for consensus
 	Epoch time.Time // time.Duration
 
+	RPCTimeout time.Duration
 	// timeouts in different stage
 	rcTimeout          time.Time // roundchange status timeout: Delta_0
 	lockTimeout        time.Time // lock status timeout: Delta_1
@@ -122,6 +137,8 @@ type Options struct {
 	participants []*bdls.Identity
 
 	Clock clock.Clock
+
+	WALDir string
 
 	// CurrentHeight
 	CurrentHeight uint64
@@ -137,6 +154,8 @@ type Options struct {
 	// BCCSP instance
 	CryptoProvider bccsp.BCCSP
 
+	Cert []byte
+
 	// BlockMetadata and Consenters should only be modified while under lock
 	// of bdlsMetadataLock
 	BlockMetadata *bdlspb.BlockMetadata
@@ -149,12 +168,21 @@ func NewChain(
 	opts Options,
 	conf Configurator,
 	rpc RPC,
-	observeC chan<- uint64) (*Chain, error) {
-		b := support.Block(support.Height() - 1)
-	return &Chain{
+	cryptoProvider bccsp.BCCSP,
+	f CreateBlockPuller,
+	haltCallback func(),
+	observeC chan<- raft.SoftState,
+) (*Chain, error) {
+
+	b := support.Block(support.Height() - 1)
+	if b == nil {
+		return nil, errors.Errorf("failed to get last block")
+	}
+	c := &Chain{
 		configurator: conf,
 		rpc:          rpc,
 		channelID:    support.ChannelID(),
+		bdlsID:       opts.BdlsID,
 		submitC:      make(chan *submit), //make(chan *orderer.SubmitRequest),
 		commitC:      make(chan *common.Block),
 		haltC:        make(chan struct{}),
@@ -162,14 +190,21 @@ func NewChain(
 		resignC:      make(chan struct{}),
 		startC:       make(chan struct{}),
 		lastBlock:    b,
-		observeC:     observeC,
-		support:      support,
-		clock:        opts.Clock,
-		logger:       opts.Logger.With("channel", support.ChannelID() /*, "node", opts.RaftID)*/),
+		//observeC:     observeC,
+		support: support,
+		clock:   opts.Clock,
+		logger:  opts.Logger.With("channel", support.ChannelID() /*, "node", opts.RaftID)*/),
 		//storage:      opts.Storage,
-		opts: opts,
-	}, nil
+		//confState:         cc,
+		createPuller:      f,
+		opts:              opts,
+		status:            types.StatusActive,
+		CryptoProvider:    cryptoProvider,
+		consensusRelation: types.ConsensusRelationConsenter,
+	}
+	return c, nil
 }
+
 /* replaced with c.lastBlock based on [FAB-14240]
 func PreviousConfigBlockFromLedgerOrPanic(ledger Ledger, logger Logger) *cb.Block {
 	block, err := previousConfigBlockFromLedger(ledger)
@@ -234,13 +269,14 @@ func (c *Chain) Errored() <-chan struct{} {
 	return c.errorC
 }
 
+// Start instructs the orderer to begin serving the chain and keep it current.
 func (c *Chain) Start() {
 	c.logger.Infof("Starting Bdls node")
 
 	// create a consensus config to validate this message at the correct height
 	config := &bdls.Config{
 		Epoch:         time.Now(),
-		CurrentHeight: c.lastBlock,
+		CurrentHeight: c.lastBlock.Header.Number, //0 I will Zero for testing
 		StateCompare:  func(a bdls.State, b bdls.State) int { return bytes.Compare(a, b) },
 		StateValidate: func(bdls.State) bool { return true },
 	}
@@ -257,26 +293,8 @@ func (c *Chain) Start() {
 	consensus.SetLatency(200 * time.Millisecond)
 	close(c.startC)
 
-}
+	//go c.run()
 
-// Halt stops the chain.
-func (c *Chain) Halt() {
-	select {
-	case c.haltC <- struct{}{}:
-	case <-c.doneC:
-		return
-	}
-	<-c.doneC
-}
-
-func (c *Chain) isConfig(env *common.Envelope) (bool, error) {
-	h, err := protoutil.ChannelHeader(env)
-	if err != nil {
-		c.logger.Errorf("failed to extract channel header from envelope")
-		return false, err
-	}
-
-	return h.Type == int32(common.HeaderType_CONFIG) || h.Type == int32(common.HeaderType_ORDERER_TRANSACTION), nil
 }
 
 func (c *Chain) submit(env *common.Envelope, configSeq uint64) error {
@@ -356,6 +374,26 @@ func (c *Chain) commitBatches(batches ...[]*common.Envelope) error {
 	return nil
 }
 
+// Halt stops the chain.
+func (c *Chain) Halt() {
+	select {
+	case c.haltC <- struct{}{}:
+	case <-c.doneC:
+		return
+	}
+	<-c.doneC
+}
+
+func (c *Chain) isConfig(env *common.Envelope) (bool, error) {
+	h, err := protoutil.ChannelHeader(env)
+	if err != nil {
+		c.logger.Errorf("failed to extract channel header from envelope")
+		return false, err
+	}
+
+	return h.Type == int32(common.HeaderType_CONFIG) || h.Type == int32(common.HeaderType_ORDERER_TRANSACTION), nil
+}
+
 func (c *Chain) remotePeers() ([]cluster.RemoteNode, error) {
 	c.bdlsMetadataLock.RLock()
 	defer c.bdlsMetadataLock.RUnlock()
@@ -363,8 +401,8 @@ func (c *Chain) remotePeers() ([]cluster.RemoteNode, error) {
 	var nodes []cluster.RemoteNode
 	for id, consenter := range c.opts.Consenters {
 		// No need to know yourself
-//TODO get BDLS ID and diclear it in the Chain Stuct
-		if id == c.id {
+		//TODO get BDLS ID and diclear it in the Chain Stuct
+		if id == 0 /*c.id */ {
 			continue
 		}
 		serverCertAsDER, err := pemToDER(consenter.ServerTlsCert, id, "server", c.logger)
@@ -397,3 +435,12 @@ func pemToDER(pemBytes []byte, id uint64, certType string, logger *flogging.Fabr
 	}
 	return bl.Bytes, nil
 }
+
+// blockCreator holds number and hash of latest block
+// so that next block will be created based on it.
+/*type blockCreator struct {
+	hash   []byte
+	number uint64
+
+	logger *flogging.FabricLogger
+}*/
