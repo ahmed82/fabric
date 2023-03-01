@@ -1,5 +1,5 @@
 /*
-Copyright IBM Corp. 2017 All Rights Reserved.
+Copyright IBM Corp. All Rights Reserved.
 
 SPDX-License-Identifier: Apache-2.0
 */
@@ -7,40 +7,103 @@ SPDX-License-Identifier: Apache-2.0
 package bdls
 
 import (
-	"github.com/golang/protobuf/proto"
-	cb "github.com/hyperledger/fabric-protos-go/common"
+	"encoding/pem"
+
+	"github.com/hyperledger/fabric-protos-go/common"
+	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/common/flogging"
-	"github.com/hyperledger/fabric/protoutil"
+	"github.com/hyperledger/fabric/orderer/common/cluster"
+	"github.com/hyperledger/fabric/orderer/common/localconfig"
+	"github.com/hyperledger/fabric/orderer/consensus"
+	"github.com/pkg/errors"
 )
 
-// blockCreator holds number and hash of latest block
-// so that next block will be created based on it.
-type blockCreator struct {
-	hash   []byte
-	number uint64
-
-	logger *flogging.FabricLogger
+// LedgerBlockPuller pulls blocks upon demand, or fetches them from the ledger
+type LedgerBlockPuller struct {
+	BlockPuller
+	BlockRetriever cluster.BlockRetriever
+	Height         func() uint64
 }
 
-func (bc *blockCreator) createNextBlock(envs []*cb.Envelope) *cb.Block {
-	data := &cb.BlockData{
-		Data: make([][]byte, len(envs)),
+func (lp *LedgerBlockPuller) PullBlock(seq uint64) *common.Block {
+	lastSeq := lp.Height() - 1
+	if lastSeq >= seq {
+		return lp.BlockRetriever.Block(seq)
+	}
+	return lp.BlockPuller.PullBlock(seq)
+}
+
+// EndpointconfigFromSupport extracts TLS CA certificates and endpoints from the ConsenterSupport
+func EndpointconfigFromSupport(support consensus.ConsenterSupport, bccsp bccsp.BCCSP) ([]cluster.EndpointCriteria, error) {
+	lastConfigBlock, err := lastConfigBlockFromSupport(support)
+	if err != nil {
+		return nil, err
+	}
+	endpointconf, err := cluster.EndpointconfigFromConfigBlock(lastConfigBlock, bccsp)
+	if err != nil {
+		return nil, err
+	}
+	return endpointconf, nil
+}
+
+func lastConfigBlockFromSupport(support consensus.ConsenterSupport) (*common.Block, error) {
+	lastBlockSeq := support.Height() - 1
+	lastBlock := support.Block(lastBlockSeq)
+	if lastBlock == nil {
+		return nil, errors.Errorf("unable to retrieve block [%d]", lastBlockSeq)
+	}
+	lastConfigBlock, err := cluster.LastConfigBlock(lastBlock, support)
+	if err != nil {
+		return nil, err
+	}
+	return lastConfigBlock, nil
+}
+
+// NewBlockPuller creates a new block puller
+func NewBlockPuller(support consensus.ConsenterSupport,
+	baseDialer *cluster.PredicateDialer,
+	clusterConfig localconfig.Cluster,
+	bccsp bccsp.BCCSP,
+) (BlockPuller, error) {
+	verifyBlockSequence := func(blocks []*common.Block, _ string) error {
+		return cluster.VerifyBlocks(blocks, support)
 	}
 
-	var err error
-	for i, env := range envs {
-		data.Data[i], err = proto.Marshal(env)
-		if err != nil {
-			bc.logger.Panicf("Could not marshal envelope: %s", err)
-		}
+	stdDialer := &cluster.StandardDialer{
+		Config: baseDialer.Config,
+	}
+	stdDialer.Config.AsyncConnect = false
+	stdDialer.Config.SecOpts.VerifyCertificate = nil
+
+	// Extract the TLS CA certs and endpoints from the configuration,
+	endpoints, err := EndpointconfigFromSupport(support, bccsp)
+	if err != nil {
+		return nil, err
 	}
 
-	bc.number++
+	der, _ := pem.Decode(stdDialer.Config.SecOpts.Certificate)
+	if der == nil {
+		return nil, errors.Errorf("client certificate isn't in PEM format: %v",
+			string(stdDialer.Config.SecOpts.Certificate))
+	}
 
-	block := protoutil.NewBlock(bc.number, bc.hash)
-	block.Header.DataHash = protoutil.BlockDataHash(data)
-	block.Data = data
+	bp := &cluster.BlockPuller{
+		VerifyBlockSequence: verifyBlockSequence,
+		Logger:              flogging.MustGetLogger("orderer.common.cluster.puller").With("channel", support.ChannelID()),
+		RetryTimeout:        clusterConfig.ReplicationRetryTimeout,
+		MaxTotalBufferBytes: clusterConfig.ReplicationBufferSize,
+		FetchTimeout:        clusterConfig.ReplicationPullTimeout,
+		Endpoints:           endpoints,
+		Signer:              support,
+		TLSCert:             der.Bytes,
+		Channel:             support.ChannelID(),
+		Dialer:              stdDialer,
+		StopChannel:         make(chan struct{}),
+	}
 
-	bc.hash = protoutil.BlockHeaderHash(block.Header)
-	return block
+	return &LedgerBlockPuller{
+		Height:         support.Height,
+		BlockRetriever: support,
+		BlockPuller:    bp,
+	}, nil
 }
