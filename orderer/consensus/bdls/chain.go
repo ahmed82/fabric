@@ -253,8 +253,17 @@ func (c *Chain) Order(env *common.Envelope, configSeq uint64) error {
 }
 
 func (c *Chain) Configure(env *common.Envelope, configSeq uint64) error {
-	//TODO
-	return nil
+	seq := c.support.Sequence()
+	if configSeq < seq {
+		c.logger.Warnf("Normal message was validated against %d, although current config seq has advanced (%d)", configSeq, seq)
+		if configEnv, _, err := c.support.ProcessConfigMsg(env); err != nil {
+			return errors.Errorf("bad normal message: %s", err)
+		} else {
+			return c.submit(configEnv, configSeq)
+		}
+	}
+
+	return c.submit(env, configSeq)
 }
 
 func (c *Chain) WaitReady() error {
