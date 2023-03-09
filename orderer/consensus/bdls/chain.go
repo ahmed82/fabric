@@ -185,7 +185,6 @@ type gc struct {
 	data  []byte
 }
 
-
 // NewChain constructs a chain object.
 func NewChain(
 	support consensus.ConsenterSupport,
@@ -334,9 +333,14 @@ func (c *Chain) submit(env *common.Envelope, configSeq uint64) error {
 
 	c.logger.Debugf("Consensus.ReceiveMessage, node id ")
 	//if err := c.consensus.ReceiveMessage(reqBytes, time.Now()); err != nil {
-	if err := c.rpc.SendSubmit(reqBytes); err != nil {
+	/*if err := c.rpc.SendSubmit(0, reqBytes); err != nil {
 		return errors.Wrapf(err, "failed to submit request")
-	}
+	}*/
+
+	// Propose the message to the current BDLS node due to
+	// all orderer Node must resive the message to be validated
+	// all BDLS node write the block on their own node
+	c.consensus.Propose(reqBytes)
 	return nil
 }
 
