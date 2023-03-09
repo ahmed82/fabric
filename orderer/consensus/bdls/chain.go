@@ -2,6 +2,18 @@
  Copyright Ahmed AlSalih @UNCC All Rights Reserved.
 
  SPDX-License-Identifier: Apache-2.0
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+
 */
 
 package bdls
@@ -41,7 +53,7 @@ const None uint64 = 0
 // RPC is used to mock the transport layer in tests.
 type RPC interface {
 	SendConsensus(dest uint64, msg *orderer.ConsensusRequest) error
-	SendSubmit(dest uint64, request *orderer.SubmitRequest, report func(err error)) error
+	SendSubmit(dest uint64, request *orderer.SubmitRequest /* report func(err error)*/) error
 }
 
 //go:generate counterfeiter -o mocks/mock_blockpuller.go . BlockPuller
@@ -162,6 +174,18 @@ type Options struct {
 	Consenters    map[uint64]*bdlspb.Consenter
 }
 
+type submit struct {
+	req *orderer.SubmitRequest
+	//leader chan uint64
+}
+
+type gc struct {
+	index uint64
+	state bdls.SignedProto
+	data  []byte
+}
+
+
 // NewChain constructs a chain object.
 func NewChain(
 	support consensus.ConsenterSupport,
@@ -234,10 +258,6 @@ func LastConfigBlock(block *com
 	return lastConfigBlock, nil
 }
 */
-type submit struct {
-	req *orderer.SubmitRequest
-	//leader chan uint64
-}
 
 func (c *Chain) Order(env *common.Envelope, configSeq uint64) error {
 	//return c.Submit(&orderer.SubmitRequest{LastValidationSeq: configSeq, Payload: env, Channel: c.channelID}, 0)
@@ -313,7 +333,8 @@ func (c *Chain) submit(env *common.Envelope, configSeq uint64) error {
 	}
 
 	c.logger.Debugf("Consensus.ReceiveMessage, node id ")
-	if err := c.consensus.ReceiveMessage(reqBytes, time.Now()); err != nil {
+	//if err := c.consensus.ReceiveMessage(reqBytes, time.Now()); err != nil {
+	if err := c.rpc.SendSubmit(reqBytes); err != nil {
 		return errors.Wrapf(err, "failed to submit request")
 	}
 	return nil
