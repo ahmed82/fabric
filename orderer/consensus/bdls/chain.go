@@ -192,15 +192,25 @@ func NewChain(
 	conf Configurator,
 	rpc RPC,
 	cryptoProvider bccsp.BCCSP,
+	//remoteNodes []cluster.RemoteNode,
 	f CreateBlockPuller,
 	haltCallback func(),
 	observeC chan<- raft.SoftState,
 ) (*Chain, error) {
 
 	b := support.Block(support.Height() - 1)
-	if b == nil {
-		return nil, errors.Errorf("failed to get last block")
-	}
+	/*	if b == nil {
+			return nil, errors.Errorf("failed to get last block")
+		}
+		var nodes []uint64
+		for _, n := range remoteNodes {
+			nodes = append(nodes, n.ID)
+		}
+		nodes = append(nodes, 0)
+		sort.Slice(nodes, func(i, j int) bool {
+			return nodes[i] < nodes[j]
+		})
+		n := uint64(len(nodes))*/
 	c := &Chain{
 		configurator: conf,
 		rpc:          rpc,
@@ -331,7 +341,7 @@ func (c *Chain) submit(env *common.Envelope, configSeq uint64) error {
 		return errors.Wrapf(err, "failed to marshal request envelope")
 	}
 
-	c.logger.Debugf("Consensus.ReceiveMessage, node id ")
+	c.logger.Debugf("Consensus.Propose ")
 	//if err := c.consensus.ReceiveMessage(reqBytes, time.Now()); err != nil {
 	/*if err := c.rpc.SendSubmit(0, reqBytes); err != nil {
 		return errors.Wrapf(err, "failed to submit request")

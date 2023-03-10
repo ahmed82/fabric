@@ -48,6 +48,7 @@ import (
 	"github.com/hyperledger/fabric/orderer/common/multichannel"
 	"github.com/hyperledger/fabric/orderer/common/onboarding"
 	"github.com/hyperledger/fabric/orderer/consensus"
+	"github.com/hyperledger/fabric/orderer/consensus/bdls"
 	"github.com/hyperledger/fabric/orderer/consensus/etcdraft"
 	"github.com/hyperledger/fabric/protoutil"
 	"go.uber.org/zap/zapcore"
@@ -806,17 +807,36 @@ func initializeMultichannelRegistrar(
 	registrar := multichannel.NewRegistrar(*conf, lf, signer, metricsProvider, bccsp, clusterDialer, callbacks...)
 
 	consenters := map[string]consensus.Consenter{}
+	/*genesisBlock := extractBootstrapBlock(conf)
+	consenterType := consensusType(genesisBlock, bccsp)
+	if _, exists := clusterTypes[consenterType]; exists {
+		switch consenterType {
+		case "etcdraft":
+			{
+				// TODO Move RAFT implementation
+				if conf.General.BootstrapMethod == "file" || conf.General.BootstrapMethod == "none" {
+					if bootstrapBlock != nil && isClusterType(bootstrapBlock, bccsp) {
+						// with a system channel
+						initializeEtcdraftConsenter(consenters, conf, lf, clusterDialer, bootstrapBlock, repInitiator, srvConf, srv, registrar, metricsProvider, bccsp)
+					} else if bootstrapBlock == nil {
+						// without a system channel: assume cluster type, InactiveChainRegistry == nil, no go-routine.
+						consenters["etcdraft"] = etcdraft.New(clusterDialer, conf, srvConf, srv, registrar, nil, metricsProvider, bccsp)
+					}
+				}
+			}
+		case "bdls":
+			{
 
-	if conf.General.BootstrapMethod == "file" || conf.General.BootstrapMethod == "none" {
-		if bootstrapBlock != nil && isClusterType(bootstrapBlock, bccsp) {
-			// with a system channel
-			initializeEtcdraftConsenter(consenters, conf, lf, clusterDialer, bootstrapBlock, repInitiator, srvConf, srv, registrar, metricsProvider, bccsp)
-		} else if bootstrapBlock == nil {
-			// without a system channel: assume cluster type, InactiveChainRegistry == nil, no go-routine.
-			consenters["etcdraft"] = etcdraft.New(clusterDialer, conf, srvConf, srv, registrar, nil, metricsProvider, bccsp)
+				consenters["bdls"] = bdls.New(clusterDialer, conf, srvConf, srv, registrar, nil, metricsProvider, bccsp)
+			}
+		default:
+			logger.Panicf("Unknown cluster type consenter")
 		}
 	}
 
+
+	*/
+	consenters["bdls"] = bdls.New(clusterDialer, conf, srvConf, srv, registrar, nil, metricsProvider, bccsp)
 	registrar.Initialize(consenters)
 	return registrar
 }
