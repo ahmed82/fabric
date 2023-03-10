@@ -1,5 +1,5 @@
 /*
- Copyright Ahmed AlSalih @UNCC All Rights Reserved.
+ Copyright All Rights Reserved.
 
  SPDX-License-Identifier: Apache-2.0
 */
@@ -13,19 +13,21 @@ import (
 	"code.cloudfoundry.org/clock"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
+	"github.com/hyperledger/fabric-protos-go/orderer"
+	"github.com/mitchellh/mapstructure"
 
 	//"github.com/hyperledger/fabric-protos-go/orderer/bdls"
 	bdlspb "github.com/hyperledger/fabric-protos-go/orderer/bdls"
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/common/crypto"
 	"github.com/hyperledger/fabric/common/flogging"
+	"github.com/hyperledger/fabric/common/metrics"
+	"github.com/hyperledger/fabric/internal/pkg/comm"
 	"github.com/hyperledger/fabric/orderer/common/cluster"
 	"github.com/hyperledger/fabric/orderer/common/localconfig"
 	"github.com/hyperledger/fabric/orderer/common/types"
 	"github.com/hyperledger/fabric/orderer/consensus"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft/v3"
-	//bdls "github.com/BDLS-bft/bdls"
 )
 
 // Consenter implements BDLS consenter
@@ -37,9 +39,38 @@ type Consenter struct {
 	OrdererConfig         localconfig.TopLevel
 	InactiveChainRegistry InactiveChainRegistry
 	ChainManager          ChainManager
+	Metrics               *Metrics
 	BCCSP                 bccsp.BCCSP
 	Dialer                *cluster.PredicateDialer
+	*Dispatcher
 }
+
+// TargetChannel extracts the channel from the given proto.Message.
+// Returns an empty string on failure.
+func (c *Consenter) TargetChannel(message proto.Message) string {
+	switch req := message.(type) {
+	case *orderer.ConsensusRequest:
+		return req.Channel
+	case *orderer.SubmitRequest:
+		return req.Channel
+	default:
+		return ""
+	}
+}
+
+// ReceiverByChain returns the MessageReceiver for the given channelID or nil
+// if not found.
+/*func (c *Consenter) ReceiverByChain(channelID string) MessageReceiver {
+	chain := c.ChainManager.GetConsensusChain(channelID)
+	if chain == nil {
+		return nil
+	}
+	if bdlsChain, isBdlsChain := chain.(*Chain); isBdlsChain {
+		return bdlsChain
+	}
+	c.Logger.Warningf("Chain %s is of type %v and not etcdraft.Chain", channelID, bdls.TypeOf(chain))
+	return nil
+}*/
 
 // ChainManager defines the methods from multichannel.Registrar needed by the Consenter.
 type ChainManager interface {
@@ -82,11 +113,11 @@ func (c *Consenter) HandleChain(support consensus.ConsenterSupport, metadata *co
 	if err != nil {
 		return nil, err
 	}
-
-	peers := make([]raft.Peer, len(m.Consenters))
+	// TODO create BDLS Nodes []bdls.Identity
+	/*peers := make([]raft.Peer, len(m.Consenters))
 	for i := range peers {
 		peers[i].ID = uint64(i + 1)
-	}
+	}*/
 	opts := Options{
 		RPCTimeout:    c.OrdererConfig.General.Cluster.RPCTimeout,
 		BdlsID:        id,
@@ -136,6 +167,91 @@ func (c *Consenter) HandleChain(support consensus.ConsenterSupport, metadata *co
 	)
 }
 
+// New creates a BDLS Consenter
+func New(
+	//pmr PolicyManagerRetriever,
+	//signerSerializer signerSerializer,
+	clusterDialer *cluster.PredicateDialer,
+	conf *localconfig.TopLevel,
+	srvConf comm.ServerConfig,
+	srv *comm.GRPCServer,
+	registrar ChainManager, //*multichannel.Registrar,
+	icr InactiveChainRegistry,
+	metricsProvider metrics.Provider,
+	bccsp bccsp.BCCSP,
+) *Consenter {
+	logger := flogging.MustGetLogger("orderer.consensus.bdls")
+
+	var cfg Config
+	err := mapstructure.Decode(conf.Consensus, &cfg)
+	if err != nil {
+		logger.Panicf("Failed to decode bdls configuration: %s", err)
+	}
+
+	consenter := &Consenter{
+		ChainManager:          registrar,
+		Cert:                  srvConf.SecOpts.Certificate,
+		Logger:                logger,
+		BdlsConfig:            cfg,
+		OrdererConfig:         *conf,
+		Dialer:                clusterDialer,
+		Metrics:               NewMetrics(metricsProvider),
+		InactiveChainRegistry: icr,
+		BCCSP:                 bccsp,
+	}
+	/*consenter.Dispatcher = &Dispatcher{
+		Logger:        logger,
+		ChainSelector: consenter,
+	}*/
+
+	comm := createComm(clusterDialer, consenter, conf.General.Cluster, metricsProvider)
+	consenter.Communication = comm
+	svc := &cluster.Service{
+		CertExpWarningThreshold:          conf.General.Cluster.CertExpirationWarningThreshold,
+		MinimumExpirationWarningInterval: cluster.MinimumExpirationWarningInterval,
+		StreamCountReporter: &cluster.StreamCountReporter{
+			Metrics: comm.Metrics,
+		},
+		StepLogger: flogging.MustGetLogger("orderer.common.cluster.step"),
+		Logger:     flogging.MustGetLogger("orderer.common.cluster"),
+		Dispatcher: comm,
+	}
+	orderer.RegisterClusterServer(srv.Server(), svc)
+
+	if icr == nil {
+		logger.Debug("Created an BDLS consenter without a system channel, InactiveChainRegistry is nil")
+	}
+
+	return consenter
+}
+
+func createComm(clusterDialer *cluster.PredicateDialer, c *Consenter, config localconfig.Cluster, p metrics.Provider) *cluster.Comm {
+	metrics := cluster.NewMetrics(p)
+	logger := flogging.MustGetLogger("orderer.common.cluster")
+
+	compareCert := cluster.CachePublicKeyComparisons(func(a, b []byte) bool {
+		err := crypto.CertificatesWithSamePublicKey(a, b)
+		if err != nil && err != crypto.ErrPubKeyMismatch {
+			crypto.LogNonPubKeyMismatchErr(logger.Errorf, err, a, b)
+		}
+		return err == nil
+	})
+
+	comm := &cluster.Comm{
+		MinimumExpirationWarningInterval: cluster.MinimumExpirationWarningInterval,
+		CertExpWarningThreshold:          config.CertExpirationWarningThreshold,
+		SendBufferSize:                   config.SendBufferSize,
+		Logger:                           logger,
+		Chan2Members:                     make(map[string]cluster.MemberMapping),
+		Connections:                      cluster.NewConnectionStore(clusterDialer, metrics.EgressTLSConnectionCount),
+		Metrics:                          metrics,
+		ChanExt:                          c,
+		H:                                c,
+		CompareCertificate:               compareCert,
+	}
+	c.Communication = comm
+	return comm
+}
 func pemToDER2(pemBytes []byte, id uint64, certType string, logger *flogging.FabricLogger) ([]byte, error) {
 	bl, _ := pem.Decode(pemBytes)
 	if bl == nil {
