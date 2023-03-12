@@ -146,7 +146,7 @@ type Options struct {
 	Peers []bdls.Identity
 
 	// participants is the consensus group, current leader is r % quorum // Consensus Group
-	participants []*bdls.Identity
+	participants []bdls.Identity
 
 	Clock clock.Clock
 
@@ -314,12 +314,12 @@ func (c *Chain) Start() {
 	// create a consensus config to validate this message at the correct height
 	config := &bdls.Config{
 		Epoch:         time.Now(),
-		CurrentHeight: c.lastBlock.Header.Number, //0 I will Zero for testing
+		CurrentHeight: c.lastBlock.Header.Number, //0 .Will use Zero for testing
 		StateCompare:  func(a bdls.State, b bdls.State) int { return bytes.Compare(a, b) },
 		StateValidate: func(bdls.State) bool { return true },
 	}
 
-	config.Participants = c.opts.Peers
+	config.Participants = c.opts.participants
 
 	// create BDLS consensus Object
 	consensus, err := bdls.NewConsensus(config)
