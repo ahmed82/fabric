@@ -533,10 +533,7 @@ func (c *Chain) Consensus(req *orderer.ConsensusRequest, sender uint64) error {
 	return nil
 }
 
-// Submit forwards the incoming request to:
-// - the local run goroutine if this is leader
-// - the actual leader via the transport mechanism
-// The call fails if there's no leader elected yet.
+
 func (c *Chain) Submit(req *orderer.SubmitRequest, sender uint64) error {
 	if err := c.isRunning(); err != nil {
 		c.Metrics.ProposalFailures.Add(1)
