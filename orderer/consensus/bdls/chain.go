@@ -20,6 +20,7 @@ package bdls
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"encoding/pem"
 	"fmt"
@@ -37,7 +38,6 @@ import (
 	"github.com/hyperledger/fabric/orderer/common/types"
 	"github.com/hyperledger/fabric/orderer/consensus"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/raft/v3"
 
 	//"google.golang.org/protobuf/proto"
 	"github.com/golang/protobuf/proto"
@@ -89,8 +89,10 @@ type Chain struct {
 	channelID string
 	consensus *bdls.Consensus
 
-	config   *bdls.Config
-	submitC  chan *submit //chan *orderer.SubmitRequest
+	config  *bdls.Config
+	submitC chan *submit //chan *orderer.SubmitRequest
+	applyC  chan apply
+
 	commitC  chan *common.Block
 	observeC chan<- uint64 // Notifies external observer on leader change (passed in optionally as an argument for tests)
 
@@ -115,9 +117,10 @@ type Chain struct {
 	//chain is running may lead to replaying of same block.
 	// https://github.com/BDLS-bft/fabric/commit/dc170d497b0a474787fc00694c0a0942697399d8
 	lastBlock       *common.Block
+	appliedIndex    uint64
 	lastConfigBlock *common.Block
 	createPuller    CreateBlockPuller // func used to create BlockPuller on demand
-
+	Metrics         *Metrics
 	// BCCSP instance
 	CryptoProvider bccsp.BCCSP
 
@@ -133,6 +136,7 @@ type Chain struct {
 	configInflight bool // this is true when there is config block or ConfChange in flight
 	blockInflight  int  // number of in flight blocks
 
+	bdlsStart bool
 	// as the block will be exchanged via <roundchange> message,
 	// we need to validate these blocks in-flight, so we need processBlock at given height with state,
 	// and compare the results with related fields in block header.
@@ -203,6 +207,15 @@ type gc struct {
 	data  []byte
 }
 
+/*
+const (
+	baseLatency               = 500 * time.Millisecond
+	maxBaseLatency            = 10 * time.Second
+	proposalCollectionTimeout = 3 * time.Second
+	updatePeriod              = 100 * time.Millisecond
+	resendPeriod              = 10 * time.Second
+)*/
+
 // NewChain constructs a chain object.
 func NewChain(
 	support consensus.ConsenterSupport,
@@ -213,7 +226,7 @@ func NewChain(
 	//remoteNodes []cluster.RemoteNode,
 	f CreateBlockPuller,
 	haltCallback func(),
-	observeC chan<- raft.SoftState,
+	//observeC chan<- bdls
 ) (*Chain, error) {
 
 	b := support.Block(support.Height() - 1)
@@ -255,7 +268,13 @@ func NewChain(
 		CryptoProvider:    cryptoProvider,
 		consensusRelation: types.ConsensusRelationConsenter,
 	}
-
+	// Sets initial values for metrics
+	c.Metrics.ClusterSize.Set(float64(len(c.opts.BlockMetadata.ConsenterIds)))
+	//c.Metrics.IsLeader.Set(float64(0)) // all nodes start out as followers
+	c.Metrics.ActiveNodes.Set(float64(0))
+	c.Metrics.CommittedBlockNumber.Set(float64(c.lastBlock.Header.Number))
+	//c.Metrics.SnapshotBlockNumber.Set(float64(c.lastSnapBlockNum))
+	c.bdlsStart = true
 	return c, nil
 }
 
@@ -364,12 +383,78 @@ func (c *Chain) Start() {
 	consensus.SetLatency(200 * time.Millisecond)
 
 	// start updater
-	consensus.Update(time.Now())
+	_ = consensus.Update(time.Now())
+	// check if new block confirmed
+	newHeight, newRound, newState := consensus.CurrentState()
+	if newHeight > c.lastBlock.Header.Number {
+		c.sealBlock(newHeight, newRound, newState)
+		return
+	}
 
 	close(c.startC)
 
 	//go c.run()
 
+}
+
+const (
+	HashLength = 32
+
+	// AbdicationMaxAttempts determines how many retries of leadership abdication we do
+	// for a transaction that removes ourselves from reconfiguration.
+	AbdicationMaxAttempts = 5
+)
+
+// Hash represents the 32 byte Keccak256 hash of arbitrary data.
+type Hash [HashLength]byte
+
+// BytesToHash sets b to hash.
+// If b is larger than len(h), b will be cropped from the left.
+func (c *Chain) BytesToHash(b []byte) Hash {
+	var h Hash
+	h.SetBytes(b)
+	return h
+}
+
+// SetBytes sets the hash to the value of b.
+// If b is larger than len(h), b will be cropped from the left.
+func (h *Hash) SetBytes(b []byte) {
+	if len(b) > len(h) {
+		b = b[len(b)-HashLength:]
+	}
+
+	copy(h[HashLength-len(b):], b)
+}
+
+// if a block hash has received it's decide message
+func (c *Chain) sealBlock(newHeight uint64, newRound uint64, newState bdls.State) {
+	// DECIDED
+	hash := c.BytesToHash(newState)
+	c.logger.Info("BDLS CONSENSUS <decide>", "HEIGHT", newHeight, "ROUND", newRound, "SEALHASH", hash)
+
+	// every validator can finalize this block to it's local blockchain now
+	newblock := &blockCreator{
+		hash:   protoutil.BlockHeaderHash(c.lastBlock.Header),
+		number: c.lastBlock.Header.Number,
+		logger: c.logger,
+	}
+	if newblock != nil {
+		// mined by me
+		header := newblock.number
+		// CurrentProof returns current <decide> message for current height
+		bts, err := c.consensus.CurrentProof().Marshal()
+		if err != nil {
+			c.logger.Info("consensusMessenger", "consensus.CurrentProof", err)
+			panic(err)
+		}
+
+		// seal the the proof in block header
+		header.Decision = bts
+
+		// broadcast the mined block
+		//mined := newblock.WithSeal(header)
+
+	}
 }
 
 func (c *Chain) propose(ch chan<- *common.Block, bc *blockCreator, batches ...[]*common.Envelope) {
@@ -414,7 +499,16 @@ func (c *Chain) submit(env *common.Envelope, configSeq uint64) error {
 	// Propose the message to the current BDLS node due to
 	// all orderer Node must resive the message to be validated
 	// all BDLS node write the block on their own node
-	c.consensus.Propose(reqBytes)
+
+	//c.consensus.Propose(reqBytes)
+
+	_ = c.consensus.ReceiveMessage(reqBytes, time.Now()) // input to core
+	// check if new block confirmed
+	newHeight, newRound, newState := c.consensus.CurrentState()
+	if newHeight == c.lastBlock.Header.Number {
+		c.sealBlock(newHeight, newRound, newState)
+	}
+
 	return nil
 }
 
@@ -552,3 +646,275 @@ func pemToDER(pemBytes []byte, id uint64, certType string, logger *flogging.Fabr
 
 	logger *flogging.FabricLogger
 }*/
+
+func (c *Chain) writeBlock(block *common.Block, index uint64) {
+	if block.Header.Number > c.lastBlock.Header.Number+1 {
+		c.logger.Panicf("Got block [%d], expect block [%d]", block.Header.Number, c.lastBlock.Header.Number+1)
+	} else if block.Header.Number < c.lastBlock.Header.Number+1 {
+		c.logger.Infof("Got block [%d], expect block [%d], this node was forced to catch up", block.Header.Number, c.lastBlock.Header.Number+1)
+		return
+	}
+
+	if c.blockInflight > 0 {
+		c.blockInflight-- // only reduce on leader
+	}
+	c.lastBlock = block
+
+	c.logger.Infof("Writing block [%d] (Raft index: %d) to ledger", block.Header.Number, index)
+
+	if protoutil.IsConfigBlock(block) {
+		//c.writeConfigBlock(block, index)
+		return
+	}
+
+	c.bdlsMetadataLock.Lock()
+	c.opts.BlockMetadata.BdlsIndex = index
+	m := protoutil.MarshalOrPanic(c.opts.BlockMetadata)
+	c.bdlsMetadataLock.Unlock()
+
+	c.support.WriteBlock(block, m)
+}
+
+// Orders the envelope in the `msg` content. SubmitRequest.
+// Returns
+//
+//	-- batches [][]*common.Envelope; the batches cut,
+//	-- pending bool; if there are envelopes pending to be ordered,
+//	-- err error; the error encountered, if any.
+//
+// It takes care of config messages as well as the revalidation of messages if the config sequence has advanced.
+func (c *Chain) ordered(msg *orderer.SubmitRequest) (batches [][]*common.Envelope, pending bool, err error) {
+	seq := c.support.Sequence()
+
+	isconfig, err := c.isConfig(msg.Payload)
+	if err != nil {
+		return nil, false, errors.Errorf("bad message: %s", err)
+	}
+
+	if isconfig {
+		// ConfigMsg
+		if msg.LastValidationSeq < seq {
+			c.logger.Warnf("Config message was validated against %d, although current config seq has advanced (%d)", msg.LastValidationSeq, seq)
+			msg.Payload, _, err = c.support.ProcessConfigMsg(msg.Payload)
+			if err != nil {
+				c.Metrics.ProposalFailures.Add(1)
+				return nil, true, errors.Errorf("bad config message: %s", err)
+			}
+		}
+
+		batch := c.support.BlockCutter().Cut()
+		batches = [][]*common.Envelope{}
+		if len(batch) != 0 {
+			batches = append(batches, batch)
+		}
+		batches = append(batches, []*common.Envelope{msg.Payload})
+		return batches, false, nil
+	}
+	// it is a normal message
+	if msg.LastValidationSeq < seq {
+		c.logger.Warnf("Normal message was validated against %d, although current config seq has advanced (%d)", msg.LastValidationSeq, seq)
+		if _, err := c.support.ProcessNormalMsg(msg.Payload); err != nil {
+			c.Metrics.ProposalFailures.Add(1)
+			return nil, true, errors.Errorf("bad normal message: %s", err)
+		}
+	}
+	batches, pending = c.support.BlockCutter().Ordered(msg.Payload)
+	return batches, pending, nil
+}
+
+func (c *Chain) run() {
+	ticking := false
+	timer := c.clock.NewTimer(time.Second)
+	// we need a stopped timer rather than nil,
+	// because we will be select waiting on timer.C()
+	if !timer.Stop() {
+		<-timer.C()
+	}
+
+	// if timer is already started, this is a no-op
+	startTimer := func() {
+		if !ticking {
+			ticking = true
+			timer.Reset(c.support.SharedConfig().BatchTimeout())
+		}
+	}
+
+	stopTimer := func() {
+		if !timer.Stop() && ticking {
+			// we only need to drain the channel if the timer expired (not explicitly stopped)
+			<-timer.C()
+		}
+		ticking = false
+	}
+
+	var soft bdls.State
+	submitC := c.submitC
+	var bc *blockCreator
+
+	var propC chan<- *common.Block
+	var cancelProp context.CancelFunc
+	cancelProp = func() {} // no-op as initial value
+
+	becomeLeader := func() (chan<- *common.Block, context.CancelFunc) {
+
+		c.blockInflight = 0
+
+		submitC = nil
+		ch := make(chan *common.Block, c.opts.MaxInflightBlocks)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go func(ctx context.Context, ch <-chan *common.Block) {
+			for {
+				select {
+				case b := <-ch:
+					data := protoutil.MarshalOrPanic(b)
+					if err := c.consensus.Propose(b.Header.DataHash.Bytes()); err != nil {
+						c.logger.Errorf("Failed to propose block [%d] to BDLS and discard %d blocks in queue: %s", b.Header.Number, len(ch), err)
+						return
+					}
+					c.logger.Debugf("Proposed block [%d] to raft consensus", b.Header.Number)
+
+				case <-ctx.Done():
+					c.logger.Debugf("Quit proposing blocks, discarded %d blocks in the queue", len(ch))
+					return
+				}
+			}
+		}(ctx, ch)
+
+		return ch, cancel
+	}
+	c.logger.Info("becomeLeader: [%d]", becomeLeader)
+	for {
+		select {
+		case s := <-submitC:
+			if s == nil {
+				// polled by `WaitReady`
+				continue
+			}
+
+			batches, pending, err := c.ordered(s.req)
+			if err != nil {
+				c.logger.Errorf("Failed to order message: %s", err)
+				continue
+			}
+
+			if !pending && len(batches) == 0 {
+				continue
+			}
+
+			if pending {
+				startTimer() // no-op if timer is already started
+			} else {
+				stopTimer()
+			}
+
+			c.propose(propC, bc, batches...)
+
+			if c.configInflight {
+				c.logger.Info("Received config transaction, pause accepting transaction till it is committed")
+				submitC = nil
+			} else if c.blockInflight >= c.opts.MaxInflightBlocks {
+				c.logger.Debugf("Number of in-flight blocks (%d) reaches limit (%d), pause accepting transaction",
+					c.blockInflight, c.opts.MaxInflightBlocks)
+				submitC = nil
+			}
+
+		case app := <-c.applyC:
+
+			c.apply(app.entries)
+
+			if true {
+				msgInflight := c.opts.BdlsID > c.appliedIndex
+				if msgInflight {
+					c.logger.Debugf("There are in flight blocks, new leader should not serve requests")
+					//continue
+				}
+
+				if c.configInflight {
+					c.logger.Debugf("There is config block in flight, new leader should not serve requests")
+					//continue
+				}
+
+				c.logger.Infof("Start accepting requests as BDLS Node at block [%d]", c.lastBlock.Header.Number)
+				bc = &blockCreator{
+					hash:   protoutil.BlockHeaderHash(c.lastBlock.Header),
+					number: c.lastBlock.Header.Number,
+					logger: c.logger,
+				}
+				submitC = c.submitC
+				//c.justElected = false
+			} else if c.configInflight {
+				c.logger.Info("Config block or ConfChange in flight, pause accepting transaction")
+				submitC = nil
+			} else if c.blockInflight < c.opts.MaxInflightBlocks {
+				submitC = c.submitC
+			}
+
+		case <-timer.C():
+			ticking = false
+
+			batch := c.support.BlockCutter().Cut()
+			if len(batch) == 0 {
+				c.logger.Warningf("Batch timer expired with no pending requests, this might indicate a bug")
+				continue
+			}
+
+			c.logger.Debugf("Batch timer expired, creating block")
+			c.propose(propC, bc, batch) // we are certain this is normal block, no need to block
+
+		case <-c.doneC:
+			stopTimer()
+			cancelProp()
+
+			select {
+			case <-c.errorC: // avoid closing closed channel
+			default:
+				close(c.errorC)
+			}
+
+			c.logger.Infof("Stop serving requests")
+			//c.periodicChecker.Stop()
+			return
+		}
+	}
+}
+
+type apply struct {
+	entries []bdls.Message
+	soft    *bdls.State
+}
+
+func (c *Chain) apply(ents []bdls.Message) {
+	if len(ents) == 0 {
+		return
+	}
+
+	if ents[0].Round > c.appliedIndex+1 {
+		c.logger.Panicf("first index of committed entry[%d] should <= appliedIndex[%d]+1", ents[0].Round, c.appliedIndex)
+	}
+
+	for i := range ents {
+		switch ents[i].Type {
+		case bdls.MessageType_Decide:
+
+			if len(ents[i].State) == 0 {
+				break
+			}
+
+			/*
+				// We need to strictly avoid re-applying normal entries,
+				// otherwise we are writing the same block twice.
+				if ents[i].Round <= c.appliedIndex {
+					c.logger.Debugf("Received block with Bdls version (%d) <= applied index (%d), skip", ents[i].version, c.appliedIndex)
+					break
+				}
+			*/
+			block := protoutil.UnmarshalBlockOrPanic(ents[i].GetState())
+			c.writeBlock(block, ents[i].GetRound())
+			c.Metrics.CommittedBlockNumber.Set(float64(block.Header.Number))
+
+		}
+
+	}
+
+}
