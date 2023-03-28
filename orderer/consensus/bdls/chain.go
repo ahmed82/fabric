@@ -22,13 +22,16 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
 	"code.cloudfoundry.org/clock"
 	"github.com/BDLS-bft/bdls"
+	"github.com/BDLS-bft/bdls/crypto/blake2b"
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/orderer"
 	bdlspb "github.com/hyperledger/fabric-protos-go/orderer/bdls"
@@ -449,8 +452,8 @@ func (c *Chain) sealBlock(newHeight uint64, newRound uint64, newState bdls.State
 		}
 
 		// seal the the proof in block header
-		header.Decision = bts
-
+		//header.Decision = bts
+		c.logger.Info("Seal block at header:%d , and:%d ", header, bts)
 		// broadcast the mined block
 		//mined := newblock.WithSeal(header)
 
@@ -747,7 +750,7 @@ func (c *Chain) run() {
 		ticking = false
 	}
 
-	var soft bdls.State
+	//var soft bdls.State
 	submitC := c.submitC
 	var bc *blockCreator
 
@@ -768,11 +771,15 @@ func (c *Chain) run() {
 				select {
 				case b := <-ch:
 					data := protoutil.MarshalOrPanic(b)
-					if err := c.consensus.Propose(b.Header.DataHash.Bytes()); err != nil {
-						c.logger.Errorf("Failed to propose block [%d] to BDLS and discard %d blocks in queue: %s", b.Header.Number, len(ch), err)
-						return
+					c.consensus.Propose(data)
+
+					newHeight, newRound, newState := c.consensus.CurrentState()
+					if newHeight > b.Header.Number {
+						h := blake2b.Sum256(newState)
+						log.Printf("<decide> at height:%v round:%v hash:%v", newHeight, newRound, hex.EncodeToString(h[:]))
+						b.Header.Number = newHeight
 					}
-					c.logger.Debugf("Proposed block [%d] to raft consensus", b.Header.Number)
+					c.logger.Debugf("Proposed block [%d] to BDLS consensus", b.Header.Number)
 
 				case <-ctx.Done():
 					c.logger.Debugf("Quit proposing blocks, discarded %d blocks in the queue", len(ch))
@@ -822,28 +829,29 @@ func (c *Chain) run() {
 		case app := <-c.applyC:
 
 			c.apply(app.entries)
+			// No need to check for leader we asume is always true as all BDLS node need to commit the message
+			//	if true {
+			msgInflight := c.opts.BdlsID > c.appliedIndex
+			if msgInflight {
+				c.logger.Debugf("There are in flight blocks, new leader should not serve requests")
+				//continue
+			}
 
-			if true {
-				msgInflight := c.opts.BdlsID > c.appliedIndex
-				if msgInflight {
-					c.logger.Debugf("There are in flight blocks, new leader should not serve requests")
-					//continue
-				}
+			if c.configInflight {
+				c.logger.Debugf("There is config block in flight, new leader should not serve requests")
+				//continue
+			}
 
-				if c.configInflight {
-					c.logger.Debugf("There is config block in flight, new leader should not serve requests")
-					//continue
-				}
-
-				c.logger.Infof("Start accepting requests as BDLS Node at block [%d]", c.lastBlock.Header.Number)
-				bc = &blockCreator{
-					hash:   protoutil.BlockHeaderHash(c.lastBlock.Header),
-					number: c.lastBlock.Header.Number,
-					logger: c.logger,
-				}
-				submitC = c.submitC
-				//c.justElected = false
-			} else if c.configInflight {
+			c.logger.Infof("Start accepting requests as BDLS Node at block [%d]", c.lastBlock.Header.Number)
+			bc = &blockCreator{
+				hash:   protoutil.BlockHeaderHash(c.lastBlock.Header),
+				number: c.lastBlock.Header.Number,
+				logger: c.logger,
+			}
+			submitC = c.submitC
+			//c.justElected = false
+			//}
+			if c.configInflight {
 				c.logger.Info("Config block or ConfChange in flight, pause accepting transaction")
 				submitC = nil
 			} else if c.blockInflight < c.opts.MaxInflightBlocks {
