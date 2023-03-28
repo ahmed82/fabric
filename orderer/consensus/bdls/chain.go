@@ -281,35 +281,7 @@ func NewChain(
 	return c, nil
 }
 
-/* replaced with c.lastBlock based on [FAB-14240]
-func PreviousConfigBlockFromLedgerOrPanic(ledger Ledger, logger Logger) *cb.Block {
-	block, err := previousConfigBlockFromLedger(ledger)
-	if err != nil {
-		logger.Panicf("Failed retrieving previous config block: %v", err)
-	}
-	return block
-}
 
-// LastConfigBlock returns the last config block relative to the given block.
-func LastConfigBlock(block *com
-	mon.Block, blockRetriever BlockRetriever) (*common.Block, error) {
-	if block == nil {
-		return nil, errors.New("nil block")
-	}
-	if blockRetriever == nil {
-		return nil, errors.New("nil blockRetriever")
-	}
-	lastConfigBlockNum, err := protoutil.GetLastConfigIndexFromBlock(block)
-	if err != nil {
-		return nil, err
-	}
-	lastConfigBlock := blockRetriever.Block(lastConfigBlockNum)
-	if lastConfigBlock == nil {
-		return nil, errors.Errorf("unable to retrieve last config block [%d]", lastConfigBlockNum)
-	}
-	return lastConfigBlock, nil
-}
-*/
 
 // GetLatestState returns latest state
 func (c *Chain) GetLatestState() (height uint64, round uint64, data bdls.State) {
@@ -396,7 +368,7 @@ func (c *Chain) Start() {
 
 	close(c.startC)
 
-	//go c.run()
+	go c.run()
 
 }
 
@@ -926,3 +898,34 @@ func (c *Chain) apply(ents []bdls.Message) {
 	}
 
 }
+
+
+/* replaced with c.lastBlock based on [FAB-14240]
+func PreviousConfigBlockFromLedgerOrPanic(ledger Ledger, logger Logger) *cb.Block {
+	block, err := previousConfigBlockFromLedger(ledger)
+	if err != nil {
+		logger.Panicf("Failed retrieving previous config block: %v", err)
+	}
+	return block
+}
+
+// LastConfigBlock returns the last config block relative to the given block.
+func LastConfigBlock(block *com
+	mon.Block, blockRetriever BlockRetriever) (*common.Block, error) {
+	if block == nil {
+		return nil, errors.New("nil block")
+	}
+	if blockRetriever == nil {
+		return nil, errors.New("nil blockRetriever")
+	}
+	lastConfigBlockNum, err := protoutil.GetLastConfigIndexFromBlock(block)
+	if err != nil {
+		return nil, err
+	}
+	lastConfigBlock := blockRetriever.Block(lastConfigBlockNum)
+	if lastConfigBlock == nil {
+		return nil, errors.Errorf("unable to retrieve last config block [%d]", lastConfigBlockNum)
+	}
+	return lastConfigBlock, nil
+}
+*/
