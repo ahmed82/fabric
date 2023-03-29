@@ -163,7 +163,7 @@ func (c *Consenter) HandleChain(support consensus.ConsenterSupport, metadata *co
 			return NewBlockPuller(support, c.Dialer, c.OrdererConfig.General.Cluster, c.BCCSP)
 		},
 		haltCallback,
-		nil,
+		//nil,
 	)
 }
 

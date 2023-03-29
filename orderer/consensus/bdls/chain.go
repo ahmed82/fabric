@@ -281,8 +281,6 @@ func NewChain(
 	return c, nil
 }
 
-
-
 // GetLatestState returns latest state
 func (c *Chain) GetLatestState() (height uint64, round uint64, data bdls.State) {
 	c.statusReportMutex.Lock()
@@ -340,7 +338,7 @@ func (c *Chain) Start() {
 	// create a consensus config to validate this message at the correct height
 	config := &bdls.Config{
 		Epoch:         time.Now(),
-		CurrentHeight: c.lastBlock.Header.Number, //0 .Will use Zero for testing
+		CurrentHeight: c.lastBlock.Header.Number -1 , //0 .Will use Zero for testing
 		StateCompare:  func(a bdls.State, b bdls.State) int { return bytes.Compare(a, b) },
 		StateValidate: func(bdls.State) bool { return true },
 	}
@@ -801,7 +799,7 @@ func (c *Chain) run() {
 		case app := <-c.applyC:
 
 			c.apply(app.entries)
-			// No need to check for leader we asume is always true as all BDLS node need to commit the message
+			// No need to check for a leader we assume is always true as all BDLS nodes need to commit the message
 			//	if true {
 			msgInflight := c.opts.BdlsID > c.appliedIndex
 			if msgInflight {
@@ -898,7 +896,6 @@ func (c *Chain) apply(ents []bdls.Message) {
 	}
 
 }
-
 
 /* replaced with c.lastBlock based on [FAB-14240]
 func PreviousConfigBlockFromLedgerOrPanic(ledger Ledger, logger Logger) *cb.Block {

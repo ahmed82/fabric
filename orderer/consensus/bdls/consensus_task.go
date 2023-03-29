@@ -141,10 +141,10 @@ func (e *BDLSEngine) verifyProposerField(header *types.Header, parentState *stat
 }
 
 // verify a proposed block from remote
-func (e *BDLSEngine) verifyRemoteProposal(chain consensus.ChainReader, block *types.Block, height uint64, state *state.StateDB) bool {
-	header := block.Header()
+func (e *BDLSEngine) verifyRemoteProposal(chain consensus.ChainReader, block *common.Block, height uint64, state *state.StateDB) bool {
+	header := block.GetHeader()
 	// verify the block number
-	if header.Number.Uint64() != height {
+	if header.Number != height {
 		e.logger.Debug("verifyRemoteProposal - mismatched block number", "actual", header.Number.Uint64(), "expected", height)
 		return false
 	}
