@@ -88,7 +88,9 @@ type Chain struct {
 	// the starting time point for consensus
 	Epoch time.Time
 
-	bdlsID    uint64
+	bdlsID uint64
+	id     bdls.Identity
+
 	channelID string
 	consensus *bdls.Consensus
 
@@ -126,6 +128,8 @@ type Chain struct {
 	Metrics         *Metrics
 	// BCCSP instance
 	CryptoProvider bccsp.BCCSP
+	// participants is the consensus group, current leader is r % quorum // Consensus Group
+	participants []bdls.Identity
 
 	opts   Options
 	logger *flogging.FabricLogger
@@ -153,6 +157,7 @@ type Chain struct {
 // Options contains necessary artifacts to start Bdls-based chain
 type Options struct {
 	BdlsID uint64
+	id     bdls.Identity
 	// the starting time point for consensus
 	Epoch time.Time // time.Duration
 
@@ -326,6 +331,16 @@ func (c *Chain) Errored() <-chan struct{} {
 	defer c.errorCLock.RUnlock()
 	return c.errorC
 }
+func (c *Chain) configureComm() error {
+
+	nodes, err := c.remotePeers()
+	if err != nil {
+		return err
+	}
+
+	c.configurator.Configure(c.channelID, nodes)
+	return nil
+}
 
 // Start instructs the orderer to begin serving the chain and keep it current.
 func (c *Chain) Start() {
@@ -335,15 +350,20 @@ func (c *Chain) Start() {
 	if err != nil {
 		return
 	}*/
+	if err := c.configureComm(); err != nil {
+		c.logger.Errorf("Failed to start chain, aborting: +%v", err)
+		close(c.doneC)
+		return
+	}
 	// create a consensus config to validate this message at the correct height
 	config := &bdls.Config{
 		Epoch:         time.Now(),
-		CurrentHeight: c.lastBlock.Header.Number -1 , //0 .Will use Zero for testing
+		CurrentHeight: c.lastBlock.Header.Number - 1, //0 .Will use Zero for testing
 		StateCompare:  func(a bdls.State, b bdls.State) int { return bytes.Compare(a, b) },
 		StateValidate: func(bdls.State) bool { return true },
 	}
 
-	config.Participants = c.opts.participants
+	config.Participants = append(config.Participants, c.participants...) // &bdls.DefaultPubKeyToIdentity())
 
 	// create BDLS consensus Object
 	consensus, err := bdls.NewConsensus(config)
@@ -577,9 +597,11 @@ func (c *Chain) remotePeers() ([]cluster.RemoteNode, error) {
 	for id, consenter := range c.opts.Consenters {
 		// No need to know yourself
 		//TODO get BDLS ID and diclear it in the Chain Stuct
-		if id == 0 /*c.id */ {
-			continue
-		}
+		/*
+			if id == 0 //c.id
+			{
+				continue
+			}*/
 		serverCertAsDER, err := pemToDER(consenter.ServerTlsCert, id, "server", c.logger)
 		if err != nil {
 			return nil, errors.WithStack(err)
@@ -588,6 +610,7 @@ func (c *Chain) remotePeers() ([]cluster.RemoteNode, error) {
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
+
 		nodes = append(nodes, cluster.RemoteNode{
 			NodeAddress: cluster.NodeAddress{
 				ID:       id,
@@ -598,6 +621,19 @@ func (c *Chain) remotePeers() ([]cluster.RemoteNode, error) {
 				ClientTLSCert: clientCertAsDER,
 			},
 		})
+
+		// BDLS participants
+		priv := new(ecdsa.PrivateKey)
+		priv.PublicKey.Curve = bdls.S256Curve
+		//priv.D = consenter.ServerTlsCert
+		priv.PublicKey.X, priv.PublicKey.Y = bdls.S256Curve.ScalarBaseMult(consenter.ServerTlsCert)
+
+		// Generate Bdls Consensus Group Participants []Identity
+		/*cert, err := crypto.PublicKeyFromCertificate(consenter.ServerTlsCert)*/
+
+		// set validator sequence
+		c.participants = append(c.participants, bdls.DefaultPubKeyToIdentity(&priv.PublicKey))
+
 	}
 	return nodes, nil
 }
@@ -610,6 +646,15 @@ func pemToDER(pemBytes []byte, id uint64, certType string, logger *flogging.Fabr
 	}
 	return bl.Bytes, nil
 }
+
+// publicKeyFromCertificate returns the public key of the given ASN1 DER certificate.
+/*func publicKeyFromCertificate(der []byte) ([]byte, error) {
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, err
+	}
+	return x509.MarshalPKIXPublicKey(cert.PublicKey)
+}*/
 
 // blockCreator holds number and hash of latest block
 // so that next block will be created based on it.

@@ -140,3 +140,12 @@ func publicKeyFromCertificate(der []byte) ([]byte, error) {
 	}
 	return x509.MarshalPKIXPublicKey(cert.PublicKey)
 }
+
+// publicKeyFromCertificate returns the public key of the given ASN1 DER certificate.
+func PublicKeyFromCertificate(der []byte) ([]byte, error) {
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, err
+	}
+	return x509.MarshalPKIXPublicKey(cert.PublicKey)
+}
