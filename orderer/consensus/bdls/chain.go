@@ -495,7 +495,7 @@ func (c *Chain) submit(env *common.Envelope, configSeq uint64) error {
 
 	//c.consensus.Propose(reqBytes)
 
-	_ = c.consensus.ReceiveMessage(reqBytes, time.Now()) // input to core
+	 c.consensus.ReceiveMessage(reqBytes, time.Now()) // input to core
 	// check if new block confirmed
 	newHeight, newRound, newState := c.consensus.CurrentState()
 	if newHeight == c.lastBlock.Header.Number {
