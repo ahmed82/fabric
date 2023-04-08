@@ -495,7 +495,7 @@ func (c *Chain) submit(env *common.Envelope, configSeq uint64) error {
 
 	//c.consensus.Propose(reqBytes)
 
-	 c.consensus.ReceiveMessage(reqBytes, time.Now()) // input to core
+	_ = c.consensus.SubmitRequest(reqBytes, time.Now()) // input to the BDLS core consensus to create (messageTuple)
 	// check if new block confirmed
 	newHeight, newRound, newState := c.consensus.CurrentState()
 	if newHeight == c.lastBlock.Header.Number {

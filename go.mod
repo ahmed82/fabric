@@ -46,7 +46,7 @@ require (
 )
 
 require (
-	github.com/BDLS-bft/bdls v0.0.0-20230116214250-19cec756c989
+	github.com/BDLS-bft/bdls v0.0.0-20230408202256-e6267384ba05
 	google.golang.org/protobuf v1.28.1
 )
 
