@@ -9,7 +9,11 @@ package bdls
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
-	bdlspb "github.com/hyperledger/fabric-protos-go/orderer/bdls"
+
+	//protos "github.com/hyperledger/fabric-protos-go/orderer/bdls"
+	"protos"
+
+	//"github.com/hyperledger/fabric/orderer/consensus/bdls/protos"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
 )
@@ -24,8 +28,8 @@ func Exist(dir string) bool {
 }
 
 // CreateConsentersMap creates a map of BDLS IDs to Consenter given the block metadata and the config metadata.
-func CreateConsentersMap(blockMetadata *bdlspb.BlockMetadata, configMetadata *bdlspb.ConfigMetadata) map[uint64]*bdlspb.Consenter {
-	consenters := map[uint64]*bdlspb.Consenter{}
+func CreateConsentersMap(blockMetadata *protos.BlockMetadata, configMetadata *protos.ConfigMetadata) map[uint64]*protos.Consenter {
+	consenters := map[uint64]*protos.Consenter{}
 	for i, consenter := range configMetadata.Consenters {
 		consenters[blockMetadata.ConsenterIds[i]] = consenter
 	}
@@ -34,16 +38,16 @@ func CreateConsentersMap(blockMetadata *bdlspb.BlockMetadata, configMetadata *bd
 
 // ReadBlockMetadata attempts to read raft metadata from block metadata, if available.
 // otherwise, it reads raft metadata from config metadata supplied.
-func ReadBlockMetadata(blockMetadata *common.Metadata, configMetadata *bdlspb.ConfigMetadata) (*bdlspb.BlockMetadata, error) {
+func ReadBlockMetadata(blockMetadata *common.Metadata, configMetadata *protos.ConfigMetadata) (*protos.BlockMetadata, error) {
 	if blockMetadata != nil && len(blockMetadata.Value) != 0 { // we have consenters mapping from block
-		m := &bdlspb.BlockMetadata{}
+		m := &protos.BlockMetadata{}
 		if err := proto.Unmarshal(blockMetadata.Value, m); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal block's metadata")
 		}
 		return m, nil
 	}
 
-	m := &bdlspb.BlockMetadata{
+	m := &protos.BlockMetadata{
 		NextConsenterId: 1,
 		ConsenterIds:    make([]uint64, len(configMetadata.Consenters)),
 	}

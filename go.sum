@@ -21,6 +21,8 @@ github.com/BDLS-bft/bdls v0.0.0-20230116214250-19cec756c989 h1:tYmUIxd732iUTZ3R0
 github.com/BDLS-bft/bdls v0.0.0-20230116214250-19cec756c989/go.mod h1:hesZ3fp+xEnW6dqvjJrbKru9K0v7y/kQloGL7iD4vR4=
 github.com/BDLS-bft/bdls v0.0.0-20230408202256-e6267384ba05 h1:tnaPpKXzkxGHx14gwE1yfbkheXt5iZM1ic94jwbFws0=
 github.com/BDLS-bft/bdls v0.0.0-20230408202256-e6267384ba05/go.mod h1:hesZ3fp+xEnW6dqvjJrbKru9K0v7y/kQloGL7iD4vR4=
+github.com/BDLS-bft/bdls v0.0.0-20230414172338-3b3b04ea4c7e h1:6+H6D8x3dJcfdIm514zyYi9nBSAjDJ172sUZFI+z7Wk=
+github.com/BDLS-bft/bdls v0.0.0-20230414172338-3b3b04ea4c7e/go.mod h1:hesZ3fp+xEnW6dqvjJrbKru9K0v7y/kQloGL7iD4vR4=
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=

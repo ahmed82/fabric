@@ -15,9 +15,12 @@ import (
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	mspprotos "github.com/hyperledger/fabric-protos-go/msp"
 	ab "github.com/hyperledger/fabric-protos-go/orderer"
-	"github.com/hyperledger/fabric-protos-go/orderer/etcdraft"
 
-	"github.com/hyperledger/fabric-protos-go/orderer/bdls"
+	//ab "github.com/hyperledger/fabric-protos-go/orderer"
+	"github.com/hyperledger/fabric-protos-go/orderer/etcdraft"
+	"github.com/hyperledger/fabric/orderer/consensus/bdls/protos"
+
+	//"github.com/hyperledger/fabric-protos-go/orderer/bdls"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/protoutil"
@@ -331,8 +334,8 @@ func MarshalEtcdRaftMetadata(md *etcdraft.ConfigMetadata) ([]byte, error) {
 }
 
 // MarshalBDLSMetadata serializes BDLS metadata.
-func MarshalBdlsMetadata(md *bdls.ConfigMetadata) ([]byte, error) {
-	copyMd := proto.Clone(md).(*bdls.ConfigMetadata)
+func MarshalBdlsMetadata(md *protos.ConfigMetadata) ([]byte, error) {
+	copyMd := proto.Clone(md).(*protos.ConfigMetadata)
 	for _, c := range copyMd.Consenters {
 		// Expect the user to set the config value for client/server certs to the
 		// path where they are persisted locally, then load these files to memory.
