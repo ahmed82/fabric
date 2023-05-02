@@ -15,9 +15,12 @@ import (
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	mspprotos "github.com/hyperledger/fabric-protos-go/msp"
 	ab "github.com/hyperledger/fabric-protos-go/orderer"
-	"github.com/hyperledger/fabric-protos-go/orderer/etcdraft"
 
-	"github.com/hyperledger/fabric-protos-go/orderer/bdls"
+	// "github.com/hyperledger/fabric-protos-go/orderer"
+	"github.com/hyperledger/fabric-protos-go/orderer/etcdraft"
+	//"github.com/hyperledger/fabric/orderer/consensus/bdls/protos"
+
+	"github.com/BDLS-bft/fabric-protos-go/orderer/bdls"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/protoutil"

@@ -46,7 +46,8 @@ require (
 )
 
 require (
-	github.com/BDLS-bft/bdls v0.0.0-20230116214250-19cec756c989
+	github.com/BDLS-bft/bdls v0.0.0-20230414172338-3b3b04ea4c7e
+	github.com/BDLS-bft/fabric-protos-go v0.0.0-20230501175108-f5171e29d403
 	google.golang.org/protobuf v1.28.1
 )
 

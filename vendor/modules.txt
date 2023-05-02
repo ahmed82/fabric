@@ -6,12 +6,15 @@ code.cloudfoundry.org/clock/fakeclock
 ## explicit
 github.com/Azure/go-ansiterm
 github.com/Azure/go-ansiterm/winterm
-# github.com/BDLS-bft/bdls v0.0.0-20230116214250-19cec756c989
+# github.com/BDLS-bft/bdls v0.0.0-20230414172338-3b3b04ea4c7e
 ## explicit; go 1.17
 github.com/BDLS-bft/bdls
 github.com/BDLS-bft/bdls/crypto/blake2b
 github.com/BDLS-bft/bdls/crypto/btcec
 github.com/BDLS-bft/bdls/timer
+# github.com/BDLS-bft/fabric-protos-go v0.0.0-20230501175108-f5171e29d403
+## explicit
+github.com/BDLS-bft/fabric-protos-go/orderer/bdls
 # github.com/IBM/idemix v0.0.0-20220112103229-701e7610d405
 ## explicit; go 1.16
 github.com/IBM/idemix

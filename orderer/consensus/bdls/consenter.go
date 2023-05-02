@@ -16,8 +16,9 @@ import (
 	"github.com/hyperledger/fabric-protos-go/orderer"
 	"github.com/mitchellh/mapstructure"
 
-	//"github.com/hyperledger/fabric-protos-go/orderer/bdls"
-	bdlspb "github.com/hyperledger/fabric-protos-go/orderer/bdls"
+	"github.com/BDLS-bft/fabric-protos-go/orderer/bdls"
+	//"protos"
+
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/common/crypto"
 	"github.com/hyperledger/fabric/common/flogging"
@@ -93,7 +94,7 @@ type InactiveChainRegistry interface {
 // HandleChain returns a new Chain instance or an error upon failure
 func (c *Consenter) HandleChain(support consensus.ConsenterSupport, metadata *common.Metadata) (consensus.Chain, error) {
 	//   HandleChain(support ConsenterSupport, metadata *cb.Metadata) (Chain, error)
-	m := &bdlspb.ConfigMetadata{}
+	m := &bdls.ConfigMetadata{}
 	if err := proto.Unmarshal(support.SharedConfig().ConsensusMetadata(), m); err != nil {
 		return nil, errors.Errorf("failed to unmarshal consensus metadata: %s", err)
 	}
@@ -163,7 +164,7 @@ func (c *Consenter) HandleChain(support consensus.ConsenterSupport, metadata *co
 			return NewBlockPuller(support, c.Dialer, c.OrdererConfig.General.Cluster, c.BCCSP)
 		},
 		haltCallback,
-		nil,
+		//nil,
 	)
 }
 
@@ -266,7 +267,7 @@ type Config struct {
 	WALDir string // WAL data of <my-channel> is stored in WALDir/<my-channel>
 }
 
-func (c *Consenter) detectSelfID(consenters map[uint64]*bdlspb.Consenter) (uint64, error) {
+func (c *Consenter) detectSelfID(consenters map[uint64]*bdls.Consenter) (uint64, error) {
 	thisNodeCertAsDER, err := pemToDER(c.Cert, 0, "server", c.Logger)
 	if err != nil {
 		return 0, err
