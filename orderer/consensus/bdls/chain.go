@@ -31,14 +31,12 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"github.com/BDLS-bft/bdls"
+
 	"github.com/BDLS-bft/bdls/crypto/blake2b"
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/orderer"
 
-	//bdlspb "github.com/hyperledger/fabric/orderer/consensus/bdls/protos"
-
-	//bdlspb "github.com/hyperledger/fabric-protos-go/orderer/bdls"
-	"protos"
+	bdlspb "github.com/BDLS-bft/fabric-protos-go/orderer/bdls"
 
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/common/flogging"
@@ -205,8 +203,8 @@ type Options struct {
 
 	// BlockMetadata and Consenters should only be modified while under lock
 	// of bdlsMetadataLock
-	BlockMetadata *protos.BlockMetadata
-	Consenters    map[uint64]*protos.Consenter
+	BlockMetadata *bdlspb.BlockMetadata
+	Consenters    map[uint64]*bdlspb.Consenter
 }
 
 type submit struct {
@@ -537,7 +535,7 @@ func (c *Chain) Consensus(req *orderer.ConsensusRequest, sender uint64) error {
 		return fmt.Errorf("failed to unmarshal StepRequest payload to BDLS Message: %s", err)
 	}
 
-	clusterMetadata := &protos.ClusterMetadata{}
+	clusterMetadata := &bdlspb.ClusterMetadata{}
 	if err := proto.Unmarshal(req.Metadata, clusterMetadata); err != nil {
 		return errors.Errorf("failed to unmarshal ClusterMetadata: %s", err)
 	}

@@ -13,15 +13,14 @@ import (
 	"sync"
 	"time"
 
-	//"github.com/hyperledger/fabric-protos-go/orderer/bdls"
+	"github.com/BDLS-bft/fabric-protos-go/orderer/bdls"
 	"github.com/hyperledger/fabric-protos-go/orderer/etcdraft"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/viperutil"
 	cf "github.com/hyperledger/fabric/core/config"
 	"github.com/hyperledger/fabric/msp"
-
 	//"orderer/consensus/bdls/protos"
-	"github.com/hyperledger/fabric/orderer/consensus/bdls/protos"
+	//"github.com/hyperledger/fabric/orderer/consensus/bdls/protos"
 )
 
 const (
@@ -160,7 +159,7 @@ type Orderer struct {
 	BatchTimeout     time.Duration            `yaml:"BatchTimeout"`
 	BatchSize        BatchSize                `yaml:"BatchSize"`
 	ConsenterMapping []*Consenter             `yaml:"ConsenterMapping"`
-	Bdls             *protos.ConfigMetadata   `yaml:"Bdls"`
+	Bdls             *bdls.ConfigMetadata     `yaml:"Bdls"`
 	EtcdRaft         *etcdraft.ConfigMetadata `yaml:"EtcdRaft"`
 	Organizations    []*Organization          `yaml:"Organizations"`
 	MaxChannels      uint64                   `yaml:"MaxChannels"`
@@ -203,8 +202,8 @@ var genesisDefaults = TopLevel{
 				SnapshotIntervalSize: 16 * 1024 * 1024, // 16 MB
 			},
 		},
-		Bdls: &protos.ConfigMetadata{
-			Options: &protos.Options{
+		Bdls: &bdls.ConfigMetadata{
+			Options: &bdls.Options{
 				Epoch:         2023 - 02 - 23,
 				CurrentHeight: 0,
 			},

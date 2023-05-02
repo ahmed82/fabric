@@ -10,8 +10,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
 
-	//protos "github.com/hyperledger/fabric-protos-go/orderer/bdls"
-	"protos"
+	protos "github.com/BDLS-bft/fabric-protos-go/orderer/bdls"
+	//"protos"
 
 	//"github.com/hyperledger/fabric/orderer/consensus/bdls/protos"
 	"github.com/pkg/errors"
