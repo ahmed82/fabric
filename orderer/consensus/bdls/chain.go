@@ -31,10 +31,13 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"github.com/BDLS-bft/bdls"
+
 	"github.com/BDLS-bft/bdls/crypto/blake2b"
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/orderer"
-	bdlspb "github.com/hyperledger/fabric-protos-go/orderer/bdls"
+
+	bdlspb "github.com/BDLS-bft/fabric-protos-go/orderer/bdls"
+
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/orderer/common/cluster"

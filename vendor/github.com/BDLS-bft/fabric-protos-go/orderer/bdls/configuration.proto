@@ -1,0 +1,35 @@
+/*
+ Copyright  All Rights Reserved.
+
+ SPDX-License-Identifier: Apache-2.0
+*/
+
+syntax = "proto3";
+
+option go_package = "github.com/hyperledger/fabric/protos/orderer/bdls";
+option java_package = "org.hyperledger.fabric.protos.orderer.bdls";
+
+package bdls;
+
+// ConfigMetadata  is serialized and set as the value of ConsensusType.Metadata in
+// a channel configuration when the ConsensusType.Type is set "BDLS".
+message ConfigMetadata  {
+	repeated Consenter consenters = 1;
+	Options options = 2;
+}
+
+// Consenter represents a consenting node (i.e. replica).
+message Consenter {
+	string host = 1;
+	uint32 port = 2;
+	bytes client_tls_cert = 3;
+	bytes server_tls_cert = 4;
+}
+
+// Options to be specified for all the BDLS nodes. These can be modified on a
+// per-channel basis.
+message Options {
+	uint64 epoch = 1; // specified in miliseconds
+	uint64 currentHeight = 2;
+
+}

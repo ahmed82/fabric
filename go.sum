@@ -17,10 +17,10 @@ code.cloudfoundry.org/clock v1.0.0/go.mod h1:QD9Lzhd/ux6eNQVUDVRJX/RKTigpewimNYB
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
 github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 h1:w+iIsaOQNcT7OZ575w+acHgRric5iCyQh+xv+KJ4HB8=
 github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78/go.mod h1:LmzpDX56iTiv29bbRTIsUNlaFfuhWRQBWjQdVyAevI8=
-github.com/BDLS-bft/bdls v0.0.0-20230116214250-19cec756c989 h1:tYmUIxd732iUTZ3R0ewPy7O7Y5CNivrcFgYVPJ0tWGQ=
-github.com/BDLS-bft/bdls v0.0.0-20230116214250-19cec756c989/go.mod h1:hesZ3fp+xEnW6dqvjJrbKru9K0v7y/kQloGL7iD4vR4=
-github.com/BDLS-bft/bdls v0.0.0-20230408202256-e6267384ba05 h1:tnaPpKXzkxGHx14gwE1yfbkheXt5iZM1ic94jwbFws0=
-github.com/BDLS-bft/bdls v0.0.0-20230408202256-e6267384ba05/go.mod h1:hesZ3fp+xEnW6dqvjJrbKru9K0v7y/kQloGL7iD4vR4=
+github.com/BDLS-bft/bdls v0.0.0-20230414172338-3b3b04ea4c7e h1:6+H6D8x3dJcfdIm514zyYi9nBSAjDJ172sUZFI+z7Wk=
+github.com/BDLS-bft/bdls v0.0.0-20230414172338-3b3b04ea4c7e/go.mod h1:hesZ3fp+xEnW6dqvjJrbKru9K0v7y/kQloGL7iD4vR4=
+github.com/BDLS-bft/fabric-protos-go v0.0.0-20230501175108-f5171e29d403 h1:Mylutmt2BsPd5Y4ZdnAWorsiTryWwzy0kvztWjzvZQw=
+github.com/BDLS-bft/fabric-protos-go v0.0.0-20230501175108-f5171e29d403/go.mod h1:VFZSSXnpYXaba+ebbILeqOxtftORzZEQbt9woCzLN8A=
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
