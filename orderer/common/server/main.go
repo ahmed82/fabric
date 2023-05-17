@@ -827,7 +827,16 @@ func initializeMultichannelRegistrar(
 		case "bdls":
 			{
 
+				if conf.General.BootstrapMethod == "file" || conf.General.BootstrapMethod == "none" {
+					if bootstrapBlock != nil && isClusterType(bootstrapBlock, bccsp) {
+						// with a system channel
+						initializeBdlsConsenter(consenters, conf, lf, clusterDialer, bootstrapBlock, repInitiator, srvConf, srv, registrar, metricsProvider, bccsp)
+					} else if bootstrapBlock == nil {
+						// without a system channel: assume cluster type, InactiveChainRegistry == nil, no go-routine.
+
 				consenters["bdls"] = bdls.New(clusterDialer, conf, srvConf, srv, registrar, nil, metricsProvider, bccsp)
+					}
+				}
 			}
 		default:
 			logger.Panicf("Unknown cluster type consenter")
@@ -836,6 +845,7 @@ func initializeMultichannelRegistrar(
 
 
 	*/
+	//Uncomment the above section line 810-847. Furthermore, comment on line 849. Choose one of your needs to enable Orderer service that maintains both (Raft & BDLS) consensus protocols.
 	consenters["bdls"] = bdls.New(clusterDialer, conf, srvConf, srv, registrar, nil, metricsProvider, bccsp)
 	registrar.Initialize(consenters)
 	return registrar
@@ -866,6 +876,34 @@ func initializeEtcdraftConsenter(consenters map[string]consensus.Consenter, conf
 
 	raftConsenter := etcdraft.New(clusterDialer, conf, srvConf, srv, registrar, icr, metricsProvider, bccsp)
 	consenters["etcdraft"] = raftConsenter
+}
+
+func initializeBdlsConsenter(consenters map[string]consensus.Consenter, conf *localconfig.TopLevel, lf blockledger.Factory, clusterDialer *cluster.PredicateDialer, bootstrapBlock *cb.Block, ri *onboarding.ReplicationInitiator, srvConf comm.ServerConfig, srv *comm.GRPCServer, registrar *multichannel.Registrar, metricsProvider metrics.Provider, bccsp bccsp.BCCSP) {
+	systemChannelName, err := protoutil.GetChannelIDFromBlock(bootstrapBlock)
+	if err != nil {
+		logger.Panicf("Failed extracting system channel name from bootstrap block: %v", err)
+	}
+	systemLedger, err := lf.GetOrCreate(systemChannelName)
+	if err != nil {
+		logger.Panicf("Failed obtaining system channel (%s) ledger: %v", systemChannelName, err)
+	}
+	getConfigBlock := func() *cb.Block {
+		return multichannel.ConfigBlockOrPanic(systemLedger)
+	}
+
+	icr := onboarding.NewInactiveChainReplicator(ri, getConfigBlock, ri.RegisterChain, conf.General.Cluster.ReplicationBackgroundRefreshInterval)
+
+	// Use the inactiveChainReplicator as a channel lister, since it has knowledge
+	// of all inactive chains.
+	// This is to prevent us pulling the entire system chain when attempting to enumerate
+	// the channels in the system.
+	ri.ChannelLister = icr
+
+	go icr.Run()
+
+	bdlsConsenter := bdls.New(clusterDialer, conf, srvConf, srv, registrar, nil, metricsProvider, bccsp)
+	// etcdraft.New(clusterDialer, conf, srvConf, srv, registrar, icr, metricsProvider, bccsp)
+	consenters["bdls"] = bdlsConsenter
 }
 
 func newOperationsSystem(ops localconfig.Operations, metrics localconfig.Metrics) *operations.System {
