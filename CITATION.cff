@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Al Salih"
+  given-names: "Ahmed"
+  orcid: "https://orcid.org/0009-0005-8631-4047"
+title: "Byzantine Fault Tolerant Consensus For Hyperledger Fabrics"
+version: 2.0.1
+doi: 10.xxxx/zenodo.xxx
+date-released: 2023-06-18
+url: "https://github.com/BDLS-bft/fabric"
