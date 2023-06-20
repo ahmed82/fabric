@@ -289,8 +289,8 @@ func NewChain(
 	return c, nil
 }
 
-// GetLatestState returns latest state
-func (c *Chain) GetLatestState() (height uint64, round uint64, data bdls.State) {
+// GetLatestBdlsState returns latest state
+func (c *Chain) GetLatestBdlsState() (height uint64, round uint64, data bdls.State) {
 	c.statusReportMutex.Lock()
 	defer c.statusReportMutex.Unlock()
 	return c.consensus.CurrentState()

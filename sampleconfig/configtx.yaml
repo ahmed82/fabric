@@ -257,130 +257,10 @@ Application: &ApplicationDefaults
 ################################################################################
 Orderer: &OrdererDefaults
 
-    # Orderer Type: The orderer implementation to start.
-    # Available types are "solo", "kafka" and "etcdraft".
-    OrdererType: solo
-
-    # Addresses used to be the list of orderer addresses that clients and peers
-    # could connect to.  However, this does not allow clients to associate orderer
-    # addresses and orderer organizations which can be useful for things such
-    # as TLS validation.  The preferred way to specify orderer addresses is now
-    # to include the OrdererEndpoints item in your org definition
-    Addresses:
-        # - 127.0.0.1:7050
-
-    # Batch Timeout: The amount of time to wait before creating a batch.
-    BatchTimeout: 2s
-
-    # Batch Size: Controls the number of messages batched into a block.
-    # The orderer views messages opaquely, but typically, messages may
-    # be considered to be Fabric transactions.  The 'batch' is the group
-    # of messages in the 'data' field of the block.  Blocks will be a few kb
-    # larger than the batch size, when signatures, hashes, and other metadata
-    # is applied.
-    BatchSize:
-
-        # Max Message Count: The maximum number of messages to permit in a
-        # batch.  No block will contain more than this number of messages.
-        MaxMessageCount: 500
-
-        # Absolute Max Bytes: The absolute maximum number of bytes allowed for
-        # the serialized messages in a batch. The maximum block size is this value
-        # plus the size of the associated metadata (usually a few KB depending
-        # upon the size of the signing identities). Any transaction larger than
-        # this value will be rejected by ordering.
-        # It is recommended not to exceed 49 MB, given the default grpc max message size of 100 MB
-        # configured on orderer and peer nodes (and allowing for message expansion during communication).
-        AbsoluteMaxBytes: 10 MB
-
-        # Preferred Max Bytes: The preferred maximum number of bytes allowed
-        # for the serialized messages in a batch. Roughly, this field may be considered
-        # the best effort maximum size of a batch. A batch will fill with messages
-        # until this size is reached (or the max message count, or batch timeout is
-        # exceeded).  If adding a new message to the batch would cause the batch to
-        # exceed the preferred max bytes, then the current batch is closed and written
-        # to a block, and a new batch containing the new message is created.  If a
-        # message larger than the preferred max bytes is received, then its batch
-        # will contain only that message.  Because messages may be larger than
-        # preferred max bytes (up to AbsoluteMaxBytes), some batches may exceed
-        # the preferred max bytes, but will always contain exactly one transaction.
-        PreferredMaxBytes: 2 MB
-
-    # Max Channels is the maximum number of channels to allow on the ordering
-    # network. When set to 0, this implies no maximum number of channels.
-    MaxChannels: 0
-
-    ConsenterMapping:
-    - ID: 1
-      Host: bft0.example.com
-      Port: 7050
-      MSPID: OrdererOrg1
-      Identity: /path/to/identity
-    - ID: 2
-      Host: bft1.example.com
-      Port: 7050
-      MSPID: OrdererOrg2
-      Identity: /path/to/identity
-    - ID: 3
-      Host: bft2.example.com
-      Port: 7050
-      MSPID: OrdererOrg3
-      Identity: /path/to/identity
-    - ID: 4
-      Host: bft3.example.com
-      Port: 7050
-      MSPID: OrdererOrg4
-      Identity: /path/to/identity
-
-    # EtcdRaft defines configuration which must be set when the "etcdraft"
-    # orderertype is chosen.
-    EtcdRaft:
-        # The set of Raft replicas for this network. For the etcd/raft-based
-        # implementation, we expect every replica to also be an OSN. Therefore,
-        # a subset of the host:port items enumerated in this list should be
-        # replicated under the Orderer.Addresses key above.
-        Consenters:
-            - Host: raft0.example.com
-              Port: 7050
-              ClientTLSCert: path/to/ClientTLSCert0
-              ServerTLSCert: path/to/ServerTLSCert0
-            - Host: raft1.example.com
-              Port: 7050
-              ClientTLSCert: path/to/ClientTLSCert1
-              ServerTLSCert: path/to/ServerTLSCert1
-            - Host: raft2.example.com
-              Port: 7050
-              ClientTLSCert: path/to/ClientTLSCert2
-              ServerTLSCert: path/to/ServerTLSCert2
-
-        # Options to be specified for all the etcd/raft nodes. The values here
-        # are the defaults for all new channels and can be modified on a
-        # per-channel basis via configuration updates.
-        Options:
-            # TickInterval is the time interval between two Node.Tick invocations.
-            TickInterval: 500ms
-
-            # ElectionTick is the number of Node.Tick invocations that must pass
-            # between elections. That is, if a follower does not receive any
-            # message from the leader of current term before ElectionTick has
-            # elapsed, it will become candidate and start an election.
-            # ElectionTick must be greater than HeartbeatTick.
-            ElectionTick: 10
-
-            # HeartbeatTick is the number of Node.Tick invocations that must
-            # pass between heartbeats. That is, a leader sends heartbeat
-            # messages to maintain its leadership every HeartbeatTick ticks.
-            HeartbeatTick: 1
-
-            # MaxInflightBlocks limits the max number of in-flight append messages
-            # during optimistic replication phase.
-            MaxInflightBlocks: 5
-
-            # SnapshotIntervalSize defines number of bytes per which a snapshot is taken
-            SnapshotIntervalSize: 16 MB
-
     # Bdls defines configuration which must be set when the "Bdls"
     # orderertype is chosen.
+    OrdererType: Bdls
+
     Bdls:
         # The set of Bdls replicas for this network. For the Bdls-based
         # implementation, we expect every replica to also be an OSN. Therefore,
@@ -408,8 +288,6 @@ Orderer: &OrdererDefaults
         # are the defaults for all new channels and can be modified on a
         # per-channel basis via configuration updates.
         Options:
-
-            Epoch: 500ms
 
             CurrentHeight: 0
 
@@ -653,39 +531,7 @@ Profiles:
                               Type: Signature
                               Rule: "OR('SampleOrg.member')"
 
-    # SampleDevModeBdls defines a configuration that differs from the
-    # SampleDevModeSolo one only in that it uses the Bdls-based orderer.
-    SampleDevModeBdls:
-        <<: *ChannelDefaults
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: Bdls
-            Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - <<: *SampleOrg
-                      Policies:
-                          <<: *SampleOrgPolicies
-                          Admins:
-                              Type: Signature
-                              Rule: "OR('SampleOrg.member')"
-  
+   
     # SampleAppChannelInsecureSolo defines an application channel configuration
     # which uses the Solo orderer and contains no MSP definitions.
     SampleAppChannelInsecureSolo:
@@ -723,6 +569,30 @@ Profiles:
     # that uses the Bdls-based orderer.
     SampleAppChannelBdls:
         <<: *ChannelDefaults
+        Consortium: SampleConsortium
+        Orderer:
+            <<: *OrdererDefaults
+          # OrdererType: Bdls
+            Organizations:
+                - <<: *SampleOrg
+                  Policies:
+                      <<: *SampleOrgPolicies
+                      Admins:
+                          Type: Signature
+                          Rule: "OR('SampleOrg.member')"
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - <<: *SampleOrg
+                  Policies:
+                      <<: *SampleOrgPolicies
+                      Admins:
+                          Type: Signature
+                          Rule: "OR('SampleOrg.member')"
+    # SampleDevModeBdls defines a configuration that differs from the
+    # SampleDevModeSolo one only in that it uses the Bdls-based orderer.
+    SampleDevModeBdls:
+        <<: *ChannelDefaults
         Orderer:
             <<: *OrdererDefaults
             OrdererType: Bdls
@@ -742,3 +612,13 @@ Profiles:
                       Admins:
                           Type: Signature
                           Rule: "OR('SampleOrg.member')"
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+                    - <<: *SampleOrg
+                      Policies:
+                          <<: *SampleOrgPolicies
+                          Admins:
+                              Type: Signature
+                              Rule: "OR('SampleOrg.member')"
+  
