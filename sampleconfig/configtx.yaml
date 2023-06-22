@@ -16,11 +16,11 @@ Organizations:
 
     # SampleOrg defines an MSP using the sampleconfig. It should never be used
     # in production but may be used as a template for other definitions.
-    - &SampleOrg
+    - &OrdererOrg
         # Name is the key by which this org will be referenced in channel
         # configuration transactions.
         # Name can include alphanumeric characters as well as dots and dashes.
-        Name: SampleOrg
+        Name: OrdererOrg
 
         # SkipAsForeign can be set to true for org definitions which are to be
         # inherited from the orderer system channel during channel creation.  This
@@ -32,39 +32,43 @@ Organizations:
 
         # ID is the key by which this org's MSP definition will be referenced.
         # ID can include alphanumeric characters as well as dots and dashes.
-        ID: SampleOrg
+        ID: OrdererMSP
 
         # MSPDir is the filesystem path which contains the MSP configuration.
-        MSPDir: msp
+        MSPDir: ../crypto-config/ordererOrganizations/example.com/msp
 
         # Policies defines the set of policies at this level of the config tree
         # For organization policies, their canonical path is usually
         #   /Channel/<Application|Orderer>/<OrgName>/<PolicyName>
-        Policies: &SampleOrgPolicies
+        Policies:
             Readers:
                 Type: Signature
-                Rule: "OR('SampleOrg.member')"
-                # If your MSP is configured with the new NodeOUs, you might
-                # want to use a more specific rule like the following:
-                # Rule: "OR('SampleOrg.admin', 'SampleOrg.peer', 'SampleOrg.client')"
+                Rule: "OR('Org1MSP.admin', 'Org1MSP.peer', 'Org1MSP.client')"
             Writers:
                 Type: Signature
-                Rule: "OR('SampleOrg.member')"
-                # If your MSP is configured with the new NodeOUs, you might
-                # want to use a more specific rule like the following:
-                # Rule: "OR('SampleOrg.admin', 'SampleOrg.client')"
+                Rule: "OR('Org1MSP.admin', 'Org1MSP.client')"
             Admins:
                 Type: Signature
-                Rule: "OR('SampleOrg.admin')"
+                Rule: "OR('Org1MSP.admin')"
             Endorsement:
                 Type: Signature
-                Rule: "OR('SampleOrg.member')"
+                Rule: "OR('Org1MSP.peer')"
+        # leave this flag set to true.
+        AnchorPeers:
+        # AnchorPeers defines the location of peers which can be used
+        # for cross org gossip communication.  Note, this value is only
+        # encoded in the genesis block in the Application section context
+            - Host: 127.0.0.1
+            Port: 7051
 
         # OrdererEndpoints is a list of all orderers this org runs which clients
         # and peers may to connect to to push transactions and receive blocks respectively.
         OrdererEndpoints:
-            - "127.0.0.1:7050"
-
+         #  - "127.0.0.1:7050"
+            - 127.0.0.1:6050
+            - 127.0.0.1:6051
+            - 127.0.0.1:6052
+            - 127.0.0.1:6053
         # AnchorPeers defines the location of peers which can be used for
         # cross-org gossip communication.
         #
@@ -72,10 +76,65 @@ Organizations:
         # `configtxgen --outputAnchorPeersUpdate` command. It is recommended
         # to instead use the channel configuration update process to set the
         # anchor peers for each organization.
+ #       AnchorPeers:
+ #           - Host: 127.0.0.1
+ #             Port: 7051
+    - &Org1
+        Name: Org1MSP
+        # ID to load the MSP definition as
+        ID: Org1MSP
+        MSPDir: ../crypto-config/peerOrganizations/org1.example.com/msp
+        # Policies defines the set of policies at this level of the config tree
+        # For organization policies, their canonical path is usually
+        #   /Channel/<Application|Orderer>/<OrgName>/<PolicyName>
+        Policies:
+        Readers:
+            Type: Signature
+            Rule: "OR('Org1MSP.admin', 'Org1MSP.peer', 'Org1MSP.client')"
+        Writers:
+            Type: Signature
+            Rule: "OR('Org1MSP.admin', 'Org1MSP.client')"
+        Admins:
+            Type: Signature
+            Rule: "OR('Org1MSP.admin')"
+        Endorsement:
+            Type: Signature
+            Rule: "OR('Org1MSP.peer')"
+        # leave this flag set to true.
         AnchorPeers:
-            - Host: 127.0.0.1
-              Port: 7051
-
+        # AnchorPeers defines the location of peers which can be used
+        # for cross org gossip communication.  Note, this value is only
+        # encoded in the genesis block in the Application section context
+        - Host: 127.0.0.1
+          Port: 7051
+    - &Org2
+        Name: Org2MSP
+        # ID to load the MSP definition as
+        ID: Org2MSP
+        MSPDir: ../crypto-config/peerOrganizations/org2.example.com/msp
+        # Policies defines the set of policies at this level of the config tree
+        # For organization policies, their canonical path is usually
+        #   /Channel/<Application|Orderer>/<OrgName>/<PolicyName>
+        Policies:
+        Readers:
+            Type: Signature
+            Rule: "OR('Org2MSP.admin', 'Org2MSP.peer', 'Org2MSP.client')"
+        Writers:
+            Type: Signature
+            Rule: "OR('Org2MSP.admin', 'Org2MSP.client')"
+        Admins:
+            Type: Signature
+            Rule: "OR('Org2MSP.admin')"
+        Endorsement:
+            Type: Signature
+            Rule: "OR('Org2MSP.peer')"
+        AnchorPeers:
+        # AnchorPeers defines the location of peers which can be used
+        # for cross org gossip communication.  Note, this value is only
+        # encoded in the genesis block in the Application section context
+        - Host: 127.0.0.1
+          Port: 7055
+################################################################################
 ################################################################################
 #
 #   CAPABILITIES
@@ -138,7 +197,7 @@ Capabilities:
 #
 ################################################################################
 Application: &ApplicationDefaults
-    ACLs: &ACLsDefault
+ #  ACLs: &ACLsDefault
         # This section provides defaults for policies for various resources
         # in the system. These "resources" could be functions on system chaincodes
         # (e.g., "GetBlockByNumber" on the "qscc" system chaincode) or other resources
@@ -150,72 +209,6 @@ Application: &ApplicationDefaults
 
         #---New Lifecycle System Chaincode (_lifecycle) function to policy mapping for access control--#
 
-        # ACL policy for _lifecycle's "CheckCommitReadiness" function
-        _lifecycle/CheckCommitReadiness: /Channel/Application/Writers
-
-        # ACL policy for _lifecycle's "CommitChaincodeDefinition" function
-        _lifecycle/CommitChaincodeDefinition: /Channel/Application/Writers
-
-        # ACL policy for _lifecycle's "QueryChaincodeDefinition" function
-        _lifecycle/QueryChaincodeDefinition: /Channel/Application/Writers
-
-        # ACL policy for _lifecycle's "QueryChaincodeDefinitions" function
-        _lifecycle/QueryChaincodeDefinitions: /Channel/Application/Writers
-
-        #---Lifecycle System Chaincode (lscc) function to policy mapping for access control---#
-
-        # ACL policy for lscc's "getid" function
-        lscc/ChaincodeExists: /Channel/Application/Readers
-
-        # ACL policy for lscc's "getdepspec" function
-        lscc/GetDeploymentSpec: /Channel/Application/Readers
-
-        # ACL policy for lscc's "getccdata" function
-        lscc/GetChaincodeData: /Channel/Application/Readers
-
-        # ACL Policy for lscc's "getchaincodes" function
-        lscc/GetInstantiatedChaincodes: /Channel/Application/Readers
-
-        #---Query System Chaincode (qscc) function to policy mapping for access control---#
-
-        # ACL policy for qscc's "GetChainInfo" function
-        qscc/GetChainInfo: /Channel/Application/Readers
-
-        # ACL policy for qscc's "GetBlockByNumber" function
-        qscc/GetBlockByNumber: /Channel/Application/Readers
-
-        # ACL policy for qscc's  "GetBlockByHash" function
-        qscc/GetBlockByHash: /Channel/Application/Readers
-
-        # ACL policy for qscc's "GetTransactionByID" function
-        qscc/GetTransactionByID: /Channel/Application/Readers
-
-        # ACL policy for qscc's "GetBlockByTxID" function
-        qscc/GetBlockByTxID: /Channel/Application/Readers
-
-        #---Configuration System Chaincode (cscc) function to policy mapping for access control---#
-
-        # ACL policy for cscc's "GetConfigBlock" function
-        cscc/GetConfigBlock: /Channel/Application/Readers
-
-        # ACL policy for cscc's "GetChannelConfig" function
-        cscc/GetChannelConfig: /Channel/Application/Readers
-
-        #---Miscellaneous peer function to policy mapping for access control---#
-
-        # ACL policy for invoking chaincodes on peer
-        peer/Propose: /Channel/Application/Writers
-
-        # ACL policy for chaincode to chaincode invocation
-        peer/ChaincodeToChaincode: /Channel/Application/Writers
-
-        #---Events resource to policy mapping for access control###---#
-
-        # ACL policy for sending block events
-        event/Block: /Channel/Application/Readers
-
-        # ACL policy for sending filtered block events
-        event/FilteredBlock: /Channel/Application/Readers
 
     # Organizations lists the orgs participating on the application side of the
     # network.
@@ -267,7 +260,10 @@ Orderer: &OrdererDefaults
     # to include the OrdererEndpoints item in your org definition
     Addresses:
         # - 127.0.0.1:7050
-
+         - 127.0.0.1:6050
+         - 127.0.0.1:6051
+         - 127.0.0.1:6052
+         - 127.0.0.1:6053
     # Batch Timeout: The amount of time to wait before creating a batch.
     BatchTimeout: 2s
 
@@ -309,27 +305,27 @@ Orderer: &OrdererDefaults
     # network. When set to 0, this implies no maximum number of channels.
     MaxChannels: 0
 
-    ConsenterMapping:
-    - ID: 1
-      Host: bft0.example.com
-      Port: 7050
-      MSPID: OrdererOrg1
-      Identity: /path/to/identity
-    - ID: 2
-      Host: bft1.example.com
-      Port: 7050
-      MSPID: OrdererOrg2
-      Identity: /path/to/identity
-    - ID: 3
-      Host: bft2.example.com
-      Port: 7050
-      MSPID: OrdererOrg3
-      Identity: /path/to/identity
-    - ID: 4
-      Host: bft3.example.com
-      Port: 7050
-      MSPID: OrdererOrg4
-      Identity: /path/to/identity
+    # ConsenterMapping:
+    # - ID: 1
+    #   Host: bft0.example.com
+    #   Port: 7050
+    #   MSPID: OrdererOrg1
+    #   Identity: /path/to/identity
+    # - ID: 2
+    #   Host: bft1.example.com
+    #   Port: 7050
+    #   MSPID: OrdererOrg2
+    #   Identity: /path/to/identity
+    # - ID: 3
+    #   Host: bft2.example.com
+    #   Port: 7050
+    #   MSPID: OrdererOrg3
+    #   Identity: /path/to/identity
+    # - ID: 4
+    #   Host: bft3.example.com
+    #   Port: 7050
+    #   MSPID: OrdererOrg4
+    #   Identity: /path/to/identity
 
     # EtcdRaft defines configuration which must be set when the "etcdraft"
     # orderertype is chosen.
@@ -388,23 +384,50 @@ Orderer: &OrdererDefaults
         # a subset of the host:port items enumerated in this list should be
         # replicated under the Orderer.Addresses key above.
         Consenters:
-            - Host: bdls0.example.com
-              Port: 7050
-              ClientTLSCert: path/to/ClientTLSCert0
-              ServerTLSCert: path/to/ServerTLSCert0
-            - Host: bdls1.example.com
-              Port: 7050
-              ClientTLSCert: path/to/ClientTLSCert1
-              ServerTLSCert: path/to/ServerTLSCert1
-            - Host: bdls2.example.com
-              Port: 7050
-              ClientTLSCert: path/to/ClientTLSCert2
-              ServerTLSCert: path/to/ServerTLSCert2
-            - Host: bdls3.example.com
-              Port: 7050
-              ClientTLSCert: path/to/ClientTLSCert3
-              ServerTLSCert: path/to/ServerTLSCert3
-
+            # - Host: bdls0.example.com
+            #   Port: 7050
+            #   ClientTLSCert: path/to/ClientTLSCert0
+            #   ServerTLSCert: path/to/ServerTLSCert0
+            # - Host: bdls1.example.com
+            #   Port: 7050
+            #   ClientTLSCert: path/to/ClientTLSCert1
+            #   ServerTLSCert: path/to/ServerTLSCert1
+            # - Host: bdls2.example.com
+            #   Port: 7050
+            #   ClientTLSCert: path/to/ClientTLSCert2
+            #   ServerTLSCert: path/to/ServerTLSCert2
+            # - Host: bdls3.example.com
+            #   Port: 7050
+            #   ClientTLSCert: path/to/ClientTLSCert3
+            #   ServerTLSCert: path/to/ServerTLSCert3
+           #- ID: 1
+            - Host: 127.0.0.1
+              Port: 6050
+            # MSPID: OrdererMSP
+            # Identity: ../crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/msp/signcerts/orderer.example.com-cert.pem
+              ClientTLSCert: ../crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
+              ServerTLSCert: ../crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
+           #- ID: 2
+            - Host: 127.0.0.1
+              Port: 6051
+            # MSPID: OrdererMSP
+            # Identity: ../crypto-config/ordererOrganizations/example.com/orderers/orderer2.example.com/msp/signcerts/orderer2.example.com-cert.pem
+              ClientTLSCert: ../crypto-config/ordererOrganizations/example.com/orderers/orderer2.example.com/tls/server.crt
+              ServerTLSCert: ../crypto-config/ordererOrganizations/example.com/orderers/orderer2.example.com/tls/server.crt
+           #- ID: 3
+            - Host: 127.0.0.1
+              Port: 6052
+            # MSPID: OrdererMSP
+            # Identity: ../crypto-config/ordererOrganizations/example.com/orderers/orderer3.example.com/msp/signcerts/orderer3.example.com-cert.pem
+              ClientTLSCert: ../crypto-config/ordererOrganizations/example.com/orderers/orderer3.example.com/tls/server.crt
+              ServerTLSCert: ../crypto-config/ordererOrganizations/example.com/orderers/orderer3.example.com/tls/server.crt
+          # - ID: 4
+            - Host: 127.0.0.1
+              Port: 6053
+            # MSPID: OrdererMSP
+            # Identity: ../crypto-config/ordererOrganizations/example.com/orderers/orderer4.example.com/msp/signcerts/orderer4.example.com-cert.pem
+              ClientTLSCert: ../crypto-config/ordererOrganizations/example.com/orderers/orderer4.example.com/tls/server.crt
+              ServerTLSCert: ../crypto-config/ordererOrganizations/example.com/orderers/orderer4.example.com/tls/server.crt
         # Options to be specified for all the Bdls nodes. The values here
         # are the defaults for all new channels and can be modified on a
         # per-channel basis via configuration updates.
@@ -488,203 +511,8 @@ Channel: &ChannelDefaults
 ################################################################################
 Profiles:
 
-    # SampleSingleMSPSolo defines a configuration which uses the Solo orderer,
-    # and contains a single MSP definition (the MSP sampleconfig).
-    # The Consortium SampleConsortium has only a single member, SampleOrg.
-    SampleSingleMSPSolo:
-        <<: *ChannelDefaults
-        Orderer:
-            <<: *OrdererDefaults
-            Organizations:
-                - *SampleOrg
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - *SampleOrg
+  
 
-    # SampleSingleMSPKafka defines a configuration that differs from the
-    # SampleSingleMSPSolo one only in that it uses the Kafka-based orderer.
-    SampleSingleMSPKafka:
-        <<: *ChannelDefaults
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: kafka
-            Organizations:
-                - *SampleOrg
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - *SampleOrg
-
-    # SampleInsecureSolo defines a configuration which uses the Solo orderer,
-    # contains no MSP definitions, and allows all transactions and channel
-    # creation requests for the consortium SampleConsortium.
-    SampleInsecureSolo:
-        <<: *ChannelDefaults
-        Orderer:
-            <<: *OrdererDefaults
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-
-    # SampleInsecureKafka defines a configuration that differs from the
-    # SampleInsecureSolo one only in that it uses the Kafka-based orderer.
-    SampleInsecureKafka:
-        <<: *ChannelDefaults
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: kafka
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-
-    # SampleDevModeSolo defines a configuration which uses the Solo orderer,
-    # contains the sample MSP as both orderer and consortium member, and
-    # requires only basic membership for admin privileges. It also defines
-    # an Application on the ordering system channel, which should usually
-    # be avoided.
-    SampleDevModeSolo:
-        <<: *ChannelDefaults
-        Orderer:
-            <<: *OrdererDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - <<: *SampleOrg
-                      Policies:
-                          <<: *SampleOrgPolicies
-                          Admins:
-                              Type: Signature
-                              Rule: "OR('SampleOrg.member')"
-
-    # SampleDevModeKafka defines a configuration that differs from the
-    # SampleDevModeSolo one only in that it uses the Kafka-based orderer.
-    SampleDevModeKafka:
-        <<: *ChannelDefaults
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: kafka
-            Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - <<: *SampleOrg
-                      Policies:
-                          <<: *SampleOrgPolicies
-                          Admins:
-                              Type: Signature
-                              Rule: "OR('SampleOrg.member')"
-
-    # SampleSingleMSPChannel defines a channel with only the sample org as a
-    # member. It is designed to be used in conjunction with SampleSingleMSPSolo
-    # and SampleSingleMSPKafka orderer profiles.   Note, for channel creation
-    # profiles, only the 'Application' section and consortium # name are
-    # considered.
-    SampleSingleMSPChannel:
-        <<: *ChannelDefaults
-        Consortium: SampleConsortium
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - <<: *SampleOrg
-
-    # SampleDevModeEtcdRaft defines a configuration that differs from the
-    # SampleDevModeSolo one only in that it uses the etcd/raft-based orderer.
-    SampleDevModeEtcdRaft:
-        <<: *ChannelDefaults
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: etcdraft
-            Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - <<: *SampleOrg
-                      Policies:
-                          <<: *SampleOrgPolicies
-                          Admins:
-                              Type: Signature
-                              Rule: "OR('SampleOrg.member')"
-
-   
-    # SampleAppChannelInsecureSolo defines an application channel configuration
-    # which uses the Solo orderer and contains no MSP definitions.
-    SampleAppChannelInsecureSolo:
-        <<: *ChannelDefaults
-        Orderer:
-            <<: *OrdererDefaults
-        Application:
-            <<: *ApplicationDefaults
-
-    # SampleAppChannelEtcdRaft defines an application channel configuration
-    # that uses the etcd/raft-based orderer.
-    SampleAppChannelEtcdRaft:
-        <<: *ChannelDefaults
-        Orderer:
-            <<: *OrdererDefaults
-            OrdererType: etcdraft
-            Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
 
     # SampleAppChannelBdls defines an application channel configuration
     # that uses the Bdls-based orderer.
@@ -695,21 +523,14 @@ Profiles:
             <<: *OrdererDefaults
           # OrdererType: Bdls
             Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
+                - <<: *OrdererOrg
+ 
         Application:
             <<: *ApplicationDefaults
             Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
+                - *Org1
+                - *Org2
+ 
     # SampleDevModeBdls defines a configuration that differs from the
     # SampleDevModeSolo one only in that it uses the Bdls-based orderer.
     SampleDevModeBdls:
@@ -718,28 +539,17 @@ Profiles:
             <<: *OrdererDefaults
             OrdererType: Bdls
             Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
+                - <<: *OrdererOrg
+
         Application:
             <<: *ApplicationDefaults
             Organizations:
-                - <<: *SampleOrg
-                  Policies:
-                      <<: *SampleOrgPolicies
-                      Admins:
-                          Type: Signature
-                          Rule: "OR('SampleOrg.member')"
+               # - <<: *SampleOrg
+                - *Org1
+                - *Org2
         Consortiums:
             SampleConsortium:
                 Organizations:
-                    - <<: *SampleOrg
-                      Policies:
-                          <<: *SampleOrgPolicies
-                          Admins:
-                              Type: Signature
-                              Rule: "OR('SampleOrg.member')"
+                  - *Org1
+                  - *Org2
   
