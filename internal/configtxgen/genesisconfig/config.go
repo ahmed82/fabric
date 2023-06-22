@@ -27,7 +27,7 @@ const (
 	// EtcdRaft The type key for etcd based RAFT consensus.
 	EtcdRaft = "etcdraft"
 
-	// Bdls The type key for etcd based Bdls consensus.
+	// Bdls The type key for Bdls based consensus.
 	Bdls = "bdls"
 )
 
@@ -77,6 +77,8 @@ const (
 	// AdminRoleAdminPrincipal is set as AdminRole to cause the MSP role of
 	// type Admin to be used as the admin principal default
 	AdminRoleAdminPrincipal = "Role.ADMIN"
+
+	channelUsingBdls = "ChannelUsingBdls"
 )
 
 // TopLevel consists of the structs used by the configtxgen tool.

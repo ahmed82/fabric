@@ -68,6 +68,7 @@ type ConfigTxOrderer struct {
 	BatchSize     *BatchSize         `yaml:"BatchSize,omitempty"`
 	Kafka         *ConfigTxKafka     `yaml:"Kafka,omitempty"`
 	EtcdRaft      *ConfigTxEtcdRaft  `yaml:"EtcdRaft,omitempty"`
+	Bdls          *ConfigTxBdls      `yaml:"Bdls,omitempty"`
 	Organizations []*Organization    `yaml:"Organizations,omitempty"`
 	Policies      map[string]*Policy `yaml:"Policies,omitempty"`
 	Capabilities  map[string]bool    `yaml:"Capabilities,omitempty"`
@@ -96,6 +97,13 @@ type ConfigTxEtcdRaft struct {
 	ExtraProperties map[string]interface{} `yaml:",inline,omitempty"`
 }
 
+type ConfigTxBdls struct {
+	Consenters []*Consenter `yaml:"Consenters,omitempty"`
+	Options    *BdlsOptions `yaml:"BdlsOptions,omitempty"`
+
+	ExtraProperties map[string]interface{} `yaml:",inline,omitempty"`
+}
+
 type Consenter struct {
 	Host          string `yaml:"Host,omitempty"`
 	Port          int    `yaml:"Port,omitempty"`
@@ -112,6 +120,11 @@ type EtcdRaftOptions struct {
 	MaxInflightBlocks    string `yaml:"MaxInflightBlocks,omitempty"`
 	SnapshotIntervalSize string `yaml:"SnapshotIntervalSize,omitempty"`
 
+	ExtraProperties map[string]interface{} `yaml:",inline,omitempty"`
+}
+
+type BdlsOptions struct {
+	CurrentHeight   string                 `yaml:"CurrentHeight,omitempty"`
 	ExtraProperties map[string]interface{} `yaml:",inline,omitempty"`
 }
 
