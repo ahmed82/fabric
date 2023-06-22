@@ -232,7 +232,6 @@ docker: $(RELEASE_IMAGES:%=%-docker) ccaasbuilder
 
 .PHONY: $(RELEASE_IMAGES:%=%-docker)
 $(RELEASE_IMAGES:%=%-docker): %-docker: $(BUILD_DIR)/images/%/$(DUMMY)
-
 $(BUILD_DIR)/images/baseos/$(DUMMY):  BUILD_CONTEXT=images/baseos
 $(BUILD_DIR)/images/ccenv/$(DUMMY):   BUILD_CONTEXT=images/ccenv
 $(BUILD_DIR)/images/peer/$(DUMMY):    BUILD_ARGS=--build-arg GO_TAGS=${GO_TAGS}
