@@ -28,7 +28,7 @@ const (
 	EtcdRaft = "etcdraft"
 
 	// Bdls The type key for Bdls based consensus.
-	Bdls = "bdls"
+	Bdls = "Bdls"
 )
 
 var logger = flogging.MustGetLogger("common.tools.configtxgen.localconfig")
