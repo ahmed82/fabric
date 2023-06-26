@@ -347,7 +347,7 @@ loop:
 	switch ord.OrdererType {
 	case "solo":
 		// nothing to be done here
-	case Bdls:
+	case "Bdls":
 		if ord.Bdls == nil {
 			logger.Panicf("%s configuration missing", Bdls)
 		}
